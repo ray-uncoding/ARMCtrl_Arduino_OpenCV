@@ -8,4 +8,4 @@
 
 ![image](https://github.com/DAL-Ray/ARMCtrl_Arduino_OpenCV/blob/main/img/Arduino%E6%8E%A5%E7%B7%9A%E5%9C%96.png)
 
-![image](https://github.com/DAL-Ray/ARMCtrl_Arduino_OpenCV/blob/main/img/%E6%A9%9F%E5%99%A8%E6%89%8B%E8%87%82%E7%AB%AF%E7%A8%8B%E5%BC%8F%E7%A2%BC%E7%AF%84%E4%BE%8B%E5%9C%96_%E9%81%94%E6%98%8ETm-900.jpg)
+![image](../img/Arduino接線圖.png)
