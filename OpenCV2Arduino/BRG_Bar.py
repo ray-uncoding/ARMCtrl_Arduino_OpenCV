@@ -17,7 +17,7 @@ cv2.createTrackbar('Sat Max', 'TrackBar', 255, 255, empty)
 cv2.createTrackbar('Val Min', 'TrackBar', 0, 255, empty)
 cv2.createTrackbar('Val Max', 'TrackBar', 255, 255, empty)
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 
 ret, frame = cap.read()
 

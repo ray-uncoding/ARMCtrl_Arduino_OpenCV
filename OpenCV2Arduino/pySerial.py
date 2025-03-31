@@ -4,12 +4,12 @@ import serial
 import time
 
 # 串列埠設定
-COM_PORT = 'COM5'
+COM_PORT = 'COM4'
 BAUD_RATES = 9600
 ser = serial.Serial(COM_PORT, BAUD_RATES, timeout=1)
 
 # 影像來源
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 
 # 面積閾值
 threshold_area = 1000
@@ -20,7 +20,7 @@ last_action = None
 # 自訂 HSV 顏色範圍
 color_ranges = {
     'Red': ([0, 82, 192], [27, 203, 255]),
-    'Green': ([100, 159, 216], [115, 250, 255])
+    'Green': ([84, 64, 146], [135, 247, 200])
 }
 
 # 對應動作字元（形狀 + 顏色）
