@@ -1,11 +1,18 @@
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QVBoxLayout,
-    QHBoxLayout, QLineEdit, QListWidget, QGridLayout, QDialog, QTextEdit
+    QHBoxLayout, QLineEdit, QListWidget, QDialog, QTextEdit
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QPainter, QColor
 from qtrangeslider import QRangeSlider
 import sys
+
+# 將來會引入這些模組：
+# from camera_stream import CameraThread
+# from hsv_filter import apply_hsv_filter
+# from json_storage import load_all_colors, save_color, delete_color, color_exists
+# from serial_sender import send_to_arduino
+# from color_utils import hsv_to_rgb, generate_gradient_pixmap
 
 
 class MainWindow(QMainWindow):
@@ -39,7 +46,7 @@ class MainWindow(QMainWindow):
         control_layout.addWidget(self.pause_btn)
         control_layout.addWidget(self.help_btn)
 
-        # 即時顏色預覽
+        # 即時預覽顏色
         preview_row = QHBoxLayout()
         self.preview_label = QLabel("即時預覽顏色：")
         self.color_preview = QLabel()
@@ -53,21 +60,18 @@ class MainWindow(QMainWindow):
         self.h_slider.setRange(0, 179)
         self.h_slider.setValue((0, 179))
         self.h_slider_label = QLabel("H 範圍： [0 ~ 179]")
-        self.h_slider.valueChanged.connect(lambda: self.update_range_label(self.h_slider, self.h_slider_label, 'H'))
         self.h_slider.valueChanged.connect(self.update_color_preview)
 
         self.s_slider = QRangeSlider(Qt.Horizontal)
         self.s_slider.setRange(0, 255)
         self.s_slider.setValue((0, 255))
         self.s_slider_label = QLabel("S 範圍： [0 ~ 255]")
-        self.s_slider.valueChanged.connect(lambda: self.update_range_label(self.s_slider, self.s_slider_label, 'S'))
         self.s_slider.valueChanged.connect(self.update_color_preview)
 
         self.v_slider = QRangeSlider(Qt.Horizontal)
         self.v_slider.setRange(0, 255)
         self.v_slider.setValue((0, 255))
         self.v_slider_label = QLabel("V 範圍： [0 ~ 255]")
-        self.v_slider.valueChanged.connect(lambda: self.update_range_label(self.v_slider, self.v_slider_label, 'V'))
         self.v_slider.valueChanged.connect(self.update_color_preview)
 
         self.name_input = QLineEdit("color_name")
@@ -119,10 +123,6 @@ class MainWindow(QMainWindow):
         bottom_layout.addWidget(self.tip_label)
 
         self.update_color_preview()
-
-    def update_range_label(self, slider, label, prefix):
-        low, high = slider.value()
-        label.setText(f"{prefix} 範圍： [{low} ~ {high}]")
 
     def update_color_preview(self):
         h_low, h_high = self.h_slider.value()
