@@ -1,46 +1,44 @@
-import time
 import cv2
-import numpy as np
+from controller.signal_mapper import get_all_slots, get_signal_code
 from core.hsv_filter import apply_hsv_filter
-from core.object_detector import detect_valid_contours
-from core.json_storage import load_all_colors
-from core.serial_sender import SerialSender
-
+from core.object_detector import detect_shape
+from core.serial_sender import send_signal
 
 class AutoRunner:
-    def __init__(self, serial_port="COM3"):
-        self.sender = SerialSender(serial_port)
-        self.last_sent_time = 0
-        self.send_interval = 2  # 秒
+    def __init__(self):
         self.enabled = False
+        self.last_sent = None
 
-    def set_enabled(self, enabled: bool):
-        self.enabled = enabled
+    def set_enabled(self, flag):
+        self.enabled = flag
+        self.last_sent = None  # 切換模式時重設
 
-    def process_frame(self, frame_bgr):
+    def process_frame(self, bgr_img):
         if not self.enabled:
-            return frame_bgr
+            return bgr_img
 
-        color_db = load_all_colors("color_db.json")
-        display = frame_bgr.copy()
+        slots = get_all_slots()
+        for code in sorted(slots.keys()):
+            conf = slots[code]
+            hsv_range = conf.get("hsv", {})
+            label = conf.get("label", "")
+            shape = conf.get("shape", "")
 
-        for name, hsv in color_db.items():
-            mask = apply_hsv_filter(frame_bgr, hsv)
-            contours = detect_valid_contours(mask)
+            # 基本檢查
+            if not label or not shape or not hsv_range:
+                continue
 
-            for cnt in contours:
-                x, y, w, h = cv2.boundingRect(cnt)
-                cv2.rectangle(display, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(display, name, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.7, (0, 255, 0), 2)
+            mask = apply_hsv_filter(bgr_img, hsv_range)
+            found, detected_shape = detect_shape(mask)
 
-                if time.time() - self.last_sent_time > self.send_interval:
-                    code = name[0].lower()
-                    self.sender.send_code(code)
-                    self.last_sent_time = time.time()
-                    break  # 傳送一筆就跳出
+            if found and detected_shape == shape:
+                if self.last_sent != code:
+                    send_signal(code)
+                    print(f"🔁 傳送訊號：{code} (對應 {label} + {shape})")
+                    self.last_sent = code
+                break
 
-        return display
+        return bgr_img  # 若要顯示處理畫面，也可改為 return mask 或加框畫面
 
     def close(self):
-        self.sender.close()
+        pass  # 若日後要釋放 serial 可放在此

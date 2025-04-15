@@ -1,23 +1,23 @@
 import cv2
+import numpy as np
 
-
-def detect_valid_contours(mask, area_threshold=3000):
+def detect_shape(mask):
     """
-    在二值化影像中尋找輪廓，
-    回傳符合面積與形狀條件的輪廓清單（近似方形）。
+    輸入 mask（單通道二值圖），回傳 (True, 'square') 或 (True, 'triangle') 或 (False, '')
     """
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    valid_contours = []
 
     for cnt in contours:
         area = cv2.contourArea(cnt)
-        if area < area_threshold:
+        if area < 1000:  # 忽略太小的雜訊
             continue
 
-        peri = cv2.arcLength(cnt, True)
-        approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
+        approx = cv2.approxPolyDP(cnt, 0.04 * cv2.arcLength(cnt, True), True)
+        vertices = len(approx)
 
-        if len(approx) == 4 and cv2.isContourConvex(approx):
-            valid_contours.append(cnt)
+        if vertices == 3:
+            return True, "triangle"
+        elif vertices == 4:
+            return True, "square"
 
-    return valid_contours
+    return False, ""

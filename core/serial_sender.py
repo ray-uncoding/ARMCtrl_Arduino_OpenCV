@@ -1,23 +1,32 @@
 import serial
+import serial.tools.list_ports
 
-class SerialSender:
-    def __init__(self, port: str, baudrate: int = 9600):
-        try:
-            self.ser = serial.Serial(port, baudrate, timeout=1)
-            print(f"[SerialSender] 已連接至 {port} @ {baudrate} baudrate")
-        except serial.SerialException as e:
-            self.ser = None
-            print(f"[SerialSender] 無法開啟序列埠：{e}")
+PORT = None
+BAUD = 9600
 
-    def send_code(self, code: str):
-        if self.ser and self.ser.is_open:
+ser = None
+
+def init_serial():
+    global ser
+    ports = list(serial.tools.list_ports.comports())
+    for p in ports:
+        if "USB" in p.description or "Arduino" in p.description:
             try:
-                self.ser.write(code.encode('utf-8'))
-                print(f"[SerialSender] 傳送指令：{code}")
+                ser = serial.Serial(p.device, BAUD, timeout=1)
+                print(f"✅ 已連接到序列埠：{p.device}")
+                return
             except Exception as e:
-                print(f"[SerialSender] 傳送失敗：{e}")
+                print(f"⚠️ 開啟序列埠失敗：{e}")
+    print("❌ 找不到可用序列埠")
 
-    def close(self):
-        if self.ser and self.ser.is_open:
-            self.ser.close()
-            print("[SerialSender] 已關閉序列埠")
+
+def send_signal(char_code):
+    global ser
+    if not ser or not ser.is_open:
+        print("❌ 尚未連接序列埠！")
+        return
+    try:
+        ser.write(char_code.encode())
+        print(f"📤 已傳送訊號：{char_code}")
+    except Exception as e:
+        print(f"⚠️ 傳送失敗：{e}")
