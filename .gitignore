@@ -1,0 +1,21 @@
+# 📦 Git Ignore for ARMCtrl_OpenCV
+
+# 🧹 Python 自動產生的快取資料夾與檔案
+__pycache__/
+*.py[cod]
+
+# 🛠 VS Code 工作目錄
+.vscode/
+
+# 💥 系統與暫存檔
+.DS_Store
+*.log
+*.tmp
+*.bak
+
+# 📁 測試暫存（如有）
+# color_db_test.json
+
+# 🚀 Pipenv 或虛擬環境（如未使用）
+.venv/
+.env/
