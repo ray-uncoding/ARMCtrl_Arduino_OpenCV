@@ -1,172 +1,149 @@
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QVBoxLayout,
-    QHBoxLayout, QLineEdit, QListWidget, QDialog, QTextEdit
+    QHBoxLayout, QLineEdit, QListWidget
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap, QPainter, QColor
+from PyQt5.QtGui import QPixmap, QImage
 from qtrangeslider import QRangeSlider
 import sys
+import numpy as np
+import cv2
 
-# 將來會引入這些模組：
-# from camera_stream import CameraThread
-# from hsv_filter import apply_hsv_filter
-# from json_storage import load_all_colors, save_color, delete_color, color_exists
-# from serial_sender import send_to_arduino
-# from color_utils import hsv_to_rgb, generate_gradient_pixmap
+from core.camera_stream import CameraThread
+from controller.hsv_editor import HSVEditor
+from controller.auto_runner import AutoRunner
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ARMCtrl OpenCV UI")
+        self.setWindowTitle("ARMCtrl OpenCV v2")
         self.setGeometry(100, 100, 1400, 850)
+
+        self.edit_mode = True
+        self.auto_runner = AutoRunner()
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
+        layout = QVBoxLayout(self.central_widget)
 
-        main_layout = QVBoxLayout()
-        self.central_widget.setLayout(main_layout)
+        # === 介面元件 ===
+        self.live_view = QLabel("[Live]")
+        self.live_view.setFixedSize(640, 360)
+        self.filtered_view = QLabel("[Filtered]")
+        self.filtered_view.setFixedSize(640, 360)
 
-        top_layout = QHBoxLayout()
-        bottom_layout = QHBoxLayout()
-        main_layout.addLayout(top_layout, 8)
-        main_layout.addLayout(bottom_layout, 1)
-
-        # === 左側控制區 ===
-        control_layout = QVBoxLayout()
-
-        self.mode_switch_btn = QPushButton("切換至 HSV 編輯模式")
-        self.start_btn = QPushButton("開始辨識")
-        self.pause_btn = QPushButton("暫停辨識")
-        self.help_btn = QPushButton("❓ HSV 說明")
-        self.help_btn.clicked.connect(self.show_help_dialog)
-
-        control_layout.addWidget(self.mode_switch_btn)
-        control_layout.addWidget(self.start_btn)
-        control_layout.addWidget(self.pause_btn)
-        control_layout.addWidget(self.help_btn)
-
-        # 即時預覽顏色
-        preview_row = QHBoxLayout()
-        self.preview_label = QLabel("即時預覽顏色：")
-        self.color_preview = QLabel()
-        self.color_preview.setFixedSize(180, 20)
-        preview_row.addWidget(self.preview_label)
-        preview_row.addWidget(self.color_preview)
-        control_layout.addLayout(preview_row)
-
-        # HSV 控制拉條
         self.h_slider = QRangeSlider(Qt.Horizontal)
         self.h_slider.setRange(0, 179)
-        self.h_slider.setValue((0, 179))
-        self.h_slider_label = QLabel("H 範圍： [0 ~ 179]")
-        self.h_slider.valueChanged.connect(self.update_color_preview)
-
         self.s_slider = QRangeSlider(Qt.Horizontal)
         self.s_slider.setRange(0, 255)
-        self.s_slider.setValue((0, 255))
-        self.s_slider_label = QLabel("S 範圍： [0 ~ 255]")
-        self.s_slider.valueChanged.connect(self.update_color_preview)
-
         self.v_slider = QRangeSlider(Qt.Horizontal)
         self.v_slider.setRange(0, 255)
-        self.v_slider.setValue((0, 255))
-        self.v_slider_label = QLabel("V 範圍： [0 ~ 255]")
-        self.v_slider.valueChanged.connect(self.update_color_preview)
+
+        self.h_label = QLabel("H 範圍：")
+        self.s_label = QLabel("S 範圍：")
+        self.v_label = QLabel("V 範圍：")
+
+        self.color_preview = QLabel()
+        self.color_preview.setFixedSize(180, 20)
 
         self.name_input = QLineEdit("color_name")
         self.save_btn = QPushButton("✅ 確認紀錄")
         self.delete_btn = QPushButton("❌ 刪除紀錄")
-
-        hsv_layout = QVBoxLayout()
-        hsv_layout.addWidget(self.h_slider_label)
-        hsv_layout.addWidget(self.h_slider)
-        hsv_layout.addWidget(self.s_slider_label)
-        hsv_layout.addWidget(self.s_slider)
-        hsv_layout.addWidget(self.v_slider_label)
-        hsv_layout.addWidget(self.v_slider)
-        hsv_layout.addWidget(QLabel("命名："))
-        hsv_layout.addWidget(self.name_input)
-        hsv_layout.addWidget(self.save_btn)
-        hsv_layout.addWidget(self.delete_btn)
-
-        control_group = QVBoxLayout()
-        control_group.addLayout(control_layout)
-        control_group.addSpacing(20)
-        control_group.addLayout(hsv_layout)
-
-        # === 中間畫面顯示區 ===
-        self.live_view_label = QLabel("[即時畫面區]")
-        self.live_view_label.setFixedSize(640, 360)
-        self.live_view_label.setStyleSheet("background-color: #ddd; border: 1px solid black;")
-
-        self.filtered_view_label = QLabel("[過濾畫面區]")
-        self.filtered_view_label.setFixedSize(640, 360)
-        self.filtered_view_label.setStyleSheet("background-color: #ccc; border: 1px solid black;")
-
-        video_layout = QVBoxLayout()
-        video_layout.addWidget(self.live_view_label)
-        video_layout.addWidget(self.filtered_view_label)
-
-        # === 右側色彩紀錄欄 ===
         self.color_list = QListWidget()
-        self.color_list.setFixedWidth(250)
 
-        # === 提示欄 ===
-        self.tip_label = QLabel("🛈 提示：請先切換至 HSV 模式，調整滑條以觀察畫面效果，並輸入名稱後儲存。")
-        self.tip_label.setStyleSheet("color: #444; font-size: 14px; padding: 5px;")
+        self.mode_btn = QPushButton("切換至自動模式")
+        self.mode_btn.clicked.connect(self.toggle_mode)
 
-        # === 加入到畫面 ===
-        top_layout.addLayout(control_group, 1)
-        top_layout.addLayout(video_layout, 2)
-        top_layout.addWidget(self.color_list, 1)
-        bottom_layout.addWidget(self.tip_label)
+        # === 編輯器 ===
+        self.editor = HSVEditor(
+            self.h_slider, self.s_slider, self.v_slider,
+            self.h_label, self.s_label, self.v_label,
+            self.color_preview, self.name_input,
+            self.color_list, self.save_btn, self.delete_btn
+        )
 
-        self.update_color_preview()
+        # === 攝影機 ===
+        self.camera = CameraThread()
+        self.camera.frame_updated.connect(self.update_view)
+        self.camera.start()
 
-    def update_color_preview(self):
-        h_low, h_high = self.h_slider.value()
-        s_low, s_high = self.s_slider.value()
-        v_low, v_high = self.v_slider.value()
-        width = 180
-        pixmap = QPixmap(width, 20)
-        painter = QPainter(pixmap)
-        for i in range(width):
-            ratio = i / (width - 1)
-            h = int(h_low + ratio * (h_high - h_low))
-            s = int(s_low + ratio * (s_high - s_low))
-            v = int(v_low + ratio * (v_high - v_low))
-            color = QColor.fromHsv(h, s, v)
-            painter.setPen(color)
-            painter.drawLine(i, 0, i, 20)
-        painter.end()
-        self.color_preview.setPixmap(pixmap)
+        # === 版面配置 ===
+        left = QVBoxLayout()
+        left.addWidget(self.mode_btn)
+        left.addWidget(self.h_label)
+        left.addWidget(self.h_slider)
+        left.addWidget(self.s_label)
+        left.addWidget(self.s_slider)
+        left.addWidget(self.v_label)
+        left.addWidget(self.v_slider)
+        left.addWidget(self.color_preview)
+        left.addWidget(self.name_input)
+        left.addWidget(self.save_btn)
+        left.addWidget(self.delete_btn)
 
-    def show_help_dialog(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("HSV 色彩模型簡介")
-        dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-        dialog.setFixedSize(400, 300)
-        layout = QVBoxLayout(dialog)
+        mid = QVBoxLayout()
+        mid.addWidget(self.live_view)
+        mid.addWidget(self.filtered_view)
 
-        help_text = QTextEdit()
-        help_text.setReadOnly(True)
-        help_text.setText("""
-[HSV 色彩模型簡介]
+        right = QVBoxLayout()
+        right.addWidget(self.color_list)
 
-- H（Hue 色相）：表示顏色的種類，如紅色、藍色、綠色等，範圍為 0~179。
-- S（Saturation 飽和度）：表示顏色的純度，數值越高顏色越鮮豔。
-- V（Value 明度）：表示顏色的亮度，數值越高越明亮。
+        top = QHBoxLayout()
+        top.addLayout(left)
+        top.addLayout(mid)
+        top.addLayout(right)
 
-提示：
-紅色 ≈ 0~10、藍色 ≈ 100~130、綠色 ≈ 40~80
-        """)
-        layout.addWidget(help_text)
-        dialog.exec_()
+        layout.addLayout(top)
+
+    def toggle_mode(self):
+        self.edit_mode = not self.edit_mode
+        self.editor.set_enabled(self.edit_mode)
+        self.auto_runner.set_enabled(not self.edit_mode)
+
+        if self.edit_mode:
+            self.mode_btn.setText("切換至自動模式")
+        else:
+            self.mode_btn.setText("切換至編輯模式")
+
+    def update_view(self, qimg):
+        pix_live = QPixmap.fromImage(qimg).scaled(self.live_view.size(), Qt.KeepAspectRatio)
+        self.live_view.setPixmap(pix_live)
+
+        # 將畫面轉回 BGR numpy
+        rgb_img = qimg.convertToFormat(QImage.Format_RGB888)
+        w, h = rgb_img.width(), rgb_img.height()
+        ptr = rgb_img.bits()
+        ptr.setsize(rgb_img.byteCount())
+        arr = np.array(ptr).reshape((h, w, 3))
+        bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+
+        if self.edit_mode:
+            hsv_range = {
+                "H": list(self.h_slider.value()),
+                "S": list(self.s_slider.value()),
+                "V": list(self.v_slider.value())
+            }
+            from core.hsv_filter import apply_hsv_filter
+            mask = apply_hsv_filter(bgr, hsv_range)
+            mask_rgb = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+            img_out = mask_rgb
+        else:
+            img_out = self.auto_runner.process_frame(bgr)
+
+        qimg2 = QImage(img_out.data, img_out.shape[1], img_out.shape[0],
+                      img_out.shape[1] * 3, QImage.Format_RGB888)
+        pix_filtered = QPixmap.fromImage(qimg2).scaled(self.filtered_view.size(), Qt.KeepAspectRatio)
+        self.filtered_view.setPixmap(pix_filtered)
+
+    def closeEvent(self, event):
+        self.camera.stop()
+        self.auto_runner.close()
+        super().closeEvent(event)
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
+    win = MainWindow()
+    win.show()
     sys.exit(app.exec_())
