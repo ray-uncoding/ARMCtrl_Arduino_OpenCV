@@ -1,71 +1,99 @@
-# ARMCtrl_Arduino_OpenCV
+# ARMCtrl_Arduino_OpenCV 🎯  
+簡易色彩與形狀識別機器手臂控制系統
 
-本專案為一套整合 Arduino 控制與 OpenCV 影像辨識的自動觸發系統，透過自訂色彩與形狀條件，達到視覺驅動的繼電器控制。
-
----
-
-## 📦 系統架構總覽
-
-```text
-ARMCtrl_Arduino_OpenCV
-├── main_ui.py                # 主介面，整合影像顯示、HSV 調整與 Slot 編輯
-├── signal_mapping.json       # 12 組槽位對應設定檔（A~L）
-├── controller/
-│   ├── auto_runner.py        # 自動模式下影像處理與傳送邏輯
-│   ├── hsv_editor.py         # HSV 調整與滑條控制模組
-│   └── signal_mapper.py      # 讀寫 Slot 設定檔，並轉換條件為對應指令碼
-├── core/
-│   ├── camera_stream.py      # 攝影機串流執行緒
-│   ├── hsv_filter.py         # 運用 HSV 遮罩處理影像
-│   ├── object_detector.py    # 輪廓形狀辨識（支援 square / triangle）
-│   └── serial_sender.py      # 傳送 A~L 至 Arduino 控制繼電器
-└── arduino2arm/
-    └── arduino_python.ino    # 接收 A~L 指令碼並控制繼電器
-```
+本專案使用 Python + OpenCV 辨識畫面中物件的「顏色 + 形狀」，並透過 Serial 傳送對應指令控制 Arduino 機器手臂。
 
 ---
 
-## 🚀 功能特色
+## 🛠 安裝與執行流程（4 步驟）
 
-- ✅ 實時 HSV 調整並可套用至任意指令槽位
-- ✅ 每組槽位包含：名稱、自訂形狀、HSV 範圍與對應字元（A~L）
-- ✅ 自動模式下辨識指定顏色 + 形狀 → 傳送代碼給 Arduino 控制
-- ✅ 支援簡易輪廓形狀辨識（方形 / 三角形）
-- ✅ 統一資料儲存格式，容易備份與匯出
-
----
-
-## 🔧 如何啟動
+### 1️⃣ 安裝必要模組
+請先安裝以下 Python 套件（建議使用 Python 3.9+）：
 
 ```bash
-pip install -r requirements.txt
-python main_ui.py
+pip install opencv-python pyserial numpy
 ```
 
-系統將：
-1. 開啟主視窗
-2. 自動初始化 `signal_mapping.json`
-3. 自動連接 Arduino（支援自動搜尋序列埠）
+---
+
+### 2️⃣ 使用 `BRG_Bar.py` 拍攝照片並調整 HSV 範圍
+運行以下程式，將攝影機畫面靜止，拍攝你想識別的物件：
+
+```bash
+python OpenCV2Arduino/BRG_Bar.py
+```
+
+你可以使用滑桿調整 HSV 範圍，觀察遮罩區畫面何時正確框選出目標。  
+記錄你理想的 HSV 區間，例如：
+
+```python
+'Red':   ([0, 82, 192], [27, 203, 255])
+```
 
 ---
 
-## 🧪 測試方式
+### 3️⃣ 編輯 `config.py` 以新增顏色與動作對應關係
+找到 `config.py`，將你的 HSV 與動作指令加入其中，例如：
 
-- 點選「切換至自動模式」
-- 放入先前設定好的顏色與形狀目標
-- 當條件符合，即會透過 Serial 傳送對應信號（如 A~L）
+```python
+color_ranges = {
+    'Red': ([0, 82, 192], [27, 203, 255])
+}
+
+action_map = {
+    ('Red', 'Square'): 'A',
+    ('Red', 'Triangle'): 'B'
+}
+```
+
+你可以加入多組顏色與形狀組合，對應不同動作。
 
 ---
 
-## 📌 注意事項
+### 4️⃣ 運行主系統
+準備好後，運行主程式：
 
-- Arduino 腳位需正確接上四路繼電器模組，並撰寫相應接收程式
-- 若序列埠找不到裝置，請確認驅動已安裝且 COM port 無誤
-- 每次僅允許最多 12 組設定，對應至指令碼 A~L（0001~1100）
+```bash
+python main.py
+```
+
+畫面會分成：
+- 左邊：原始畫面
+- 右邊：辨識後畫面（含框選與文字）
+- 並且會自動透過 Serial 傳送指令給 Arduino
+
+按 `q` 可中止程式。
 
 ---
 
-## 👨‍💻 作者與貢獻
+## 📂 專案結構說明
 
-本專案由 [@ray-uncoding](https://github.com/ray-uncoding) 設計與開發，
-如有建議或錯誤回報，歡迎開啟 issue 或提出 pull request 🙌
+| 檔案/資料夾       | 說明 |
+|------------------|------|
+| `main.py`         | 主系統程式入口，整合偵測 + 傳送 |
+| `config.py`       | 設定顏色與動作對應關係 |
+| `detector.py`     | 圖像處理與形狀判斷邏輯 |
+| `signal_sender.py`| 控制 Serial 傳送與接收 |
+| `ui_basic.py`     | 顯示畫面與偵測結果 |
+| `test_sender.py`  | 單獨測試 Serial 傳輸模組 |
+| `BRG_Bar.py`      | 色彩選擇工具（拉條版） |
+| `OpenCV2Arduino/` | 放置攝影模組與調整工具 |
+| `Arduino2ARM/`    | Arduino 範例程式，接收指令與控制 |
+
+---
+
+## 🧩 常見操作提示
+
+- 📷 請確保攝影機鏡頭亮度充足，避免太暗影響辨識
+- 🟥 若辨識不穩定，可調整 HSV 範圍或增加 `cv2.GaussianBlur`
+- 🧪 若未偵測到動作不會重複發送（具阻回機制）
+- 📦 Arduino 需與 Python 使用相同 baudrate，並選對 COM port
+
+---
+
+## 🙌 作者說明
+本專案為展示與實驗用途，可作為物件辨識 + Arduino 控制的入門練習範例。
+
+若有教學需求，建議可加入教學分支，拆分為範例版與完整版。
+
+---
