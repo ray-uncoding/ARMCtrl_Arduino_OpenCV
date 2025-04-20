@@ -1,14 +1,23 @@
-char val = 'n';  // 預設值
+const int relay_channal_1 = 8;
+const int relay_channal_2 = 9;
+const int relay_channal_3 = 10;
+const int relay_channal_4 = 11;
+const int test_ledPin     = 13;
+
+#define BUADRATE 9600
+bool NPN_mode = true;   //默認機台IO口為NPN, 要修改就反過來
+
+char val;
 
 void setup() {
-  Serial.begin(9600);
-  pinMode(8, OUTPUT);
-  pinMode(9, OUTPUT);
-  pinMode(10, OUTPUT);
-  pinMode(11, OUTPUT);
-  pinMode(13, OUTPUT);  // 內建 LED
-  
-  resetPins();
+  Serial.begin(BUADRATE);
+  pinMode(relay_channal_1, OUTPUT);
+  pinMode(relay_channal_2, OUTPUT);
+  pinMode(relay_channal_3, OUTPUT);
+  pinMode(relay_channal_4, OUTPUT);
+  pinMode(test_ledPin, OUTPUT);
+  relay_output(0, 0, 0, 0);   //釋放訊號
+  val = 't';
 }
 
 void loop() {
@@ -16,85 +25,86 @@ void loop() {
     val = Serial.read();
     Serial.print("收到指令: ");
     Serial.println(val);
-
-    // 如果收到測試訊號 't'，執行閃燈三下
-    if (val == 't') {
-      test_led();
-      val = 'n';  // 避免干擾
-    }
   }
 
   switch (val) {
     case 'A':  // 紅色三角形
-      action_a();
+      Serial.println("動作 A: 0001");
+
+      delay(3000);                //等待手臂穩定
+      relay_output(0, 0, 0, 1);   //發送訊號拿取
+      delay(3000);                //維持訊號
+      relay_output(0, 0, 0, 0);   //釋放訊號
+      eat_signal();               //吃掉多餘訊號
+      val = 'n';                  //阻回
       break;
     case 'B':  // 紅色方形
-      action_b();
+      Serial.println("動作 B: 0010");
+
+      delay(3000);                //等待手臂穩定
+      relay_output(0, 0, 1, 0);   //發送訊號拿取
+      delay(3000);                //維持訊號
+      relay_output(0, 0, 0, 0);   //釋放訊號
+      eat_signal();               //吃掉多餘訊號
+      val = 'n';                  //阻回
       break;
-    case 'C':  // 黑色三角形
-      action_c();
+    case 'C':  // 藍色三角形
+      Serial.println("動作 C: 0011");
+
+      delay(3000);                //等待手臂穩定
+      relay_output(0, 0, 1, 1);   //發送訊號拿取
+      delay(3000);                //維持訊號
+      relay_output(0, 0, 0, 0);   //釋放訊號
+      eat_signal();               //吃掉多餘訊號
+      val = 'n';                  //阻回
       break;
-    case 'D':  // 黑色方形
-      action_d();
+    case 'D':  // 藍色方形
+      Serial.println("動作 D: 0100");
+
+      delay(3000);                //等待手臂穩定
+      relay_output(0, 1, 0, 0);   //發送訊號拿取
+      delay(3000);                //維持訊號
+      relay_output(0, 0, 0, 0);   //釋放訊號
+      eat_signal();               //吃掉多餘訊號
+      val = 'n';                  //阻回
       break;
-    case 'R':
-      resetPins();
+    case 't':  // 測試通訊
+      test_led();
+      val = 'n';
+      break;
+    default:
+      relay_output(0, 0, 0, 0);   //釋放訊號
       break;
   }
   delay(100);
 }
 
-void resetPins() {
-  digitalWrite(8, 0);
-  digitalWrite(9, 0);
-  digitalWrite(10, 0);
-  digitalWrite(11, 0);
-}
-
 void test_led() {
+  Serial.println("測試開始! 準備閃燈");
   for (int i = 0; i < 3; i++) {
-    digitalWrite(13, 1);
+    digitalWrite(test_ledPin, 1);
     delay(1000);
-    digitalWrite(13, 0);
+    digitalWrite(test_ledPin, 0);
     delay(1000);
   }
-  Serial.println("閃燈完成");
+  Serial.println("測試完成");
 }
 
-// npn IO口訊號要反過來
-
-void action_a() {
-  digitalWrite(8, 0);
-  digitalWrite(9, 1);
-  digitalWrite(10, 1);
-  digitalWrite(11, 1);
-  Serial.println("動作 A: 1000");
-  val = 'n';
+void relay_output(int IN_1, int IN_2, int IN_3, int IN_4){
+  if (NPN_mode){
+    IN_1 = !IN_1;
+    IN_2 = !IN_2;
+    IN_3 = !IN_3;
+    IN_4 = !IN_4;
+  }
+  digitalWrite(relay_channal_1, IN_1);
+  digitalWrite(relay_channal_2, IN_2);
+  digitalWrite(relay_channal_3, IN_3);
+  digitalWrite(relay_channal_4, IN_4);
 }
 
-void action_b() {
-  digitalWrite(8, 1);
-  digitalWrite(9, 0);
-  digitalWrite(10, 1);
-  digitalWrite(11, 1);
-  Serial.println("動作 B: 0100");
-  val = 'n';
-}
-
-void action_c() {
-  digitalWrite(8, 0);
-  digitalWrite(9, 0);
-  digitalWrite(10, 1);
-  digitalWrite(11, 1);
-  Serial.println("動作 C: 1100");
-  val = 'n';
-}
-
-void action_d() {
-  digitalWrite(8, 1);
-  digitalWrite(9, 1);
-  digitalWrite(10, 0);
-  digitalWrite(11, 1);
-  Serial.println("動作 D: 0010");
-  val = 'n';
+void eat_signal(){
+  while (Serial.available()) {
+    val = Serial.read();
+  }
 }

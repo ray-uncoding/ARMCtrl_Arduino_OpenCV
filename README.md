@@ -20,7 +20,7 @@ pip install opencv-python pyserial numpy
 運行以下程式，將攝影機畫面靜止，拍攝你想識別的物件：
 
 ```bash
-python OpenCV2Arduino/BRG_Bar.py
+python BRG_Bar.py
 ```
 
 你可以使用滑桿調整 HSV 範圍，觀察遮罩區畫面何時正確框選出目標。  
@@ -29,28 +29,11 @@ python OpenCV2Arduino/BRG_Bar.py
 ```python
 'Red':   ([0, 82, 192], [27, 203, 255])
 ```
-
+按 `q` 可中止程式。
+按 `s` 可儲存調整。
 ---
 
-### 3️⃣ 編輯 `config.py` 以新增顏色與動作對應關係
-找到 `config.py`，將你的 HSV 與動作指令加入其中，例如：
-
-```python
-color_ranges = {
-    'Red': ([0, 82, 192], [27, 203, 255])
-}
-
-action_map = {
-    ('Red', 'Square'): 'A',
-    ('Red', 'Triangle'): 'B'
-}
-```
-
-你可以加入多組顏色與形狀組合，對應不同動作。
-
----
-
-### 4️⃣ 運行主系統
+### 3️⃣ 運行主系統
 準備好後，運行主程式：
 
 ```bash
@@ -63,22 +46,6 @@ python main.py
 - 並且會自動透過 Serial 傳送指令給 Arduino
 
 按 `q` 可中止程式。
-
----
-
-## 📂 專案結構說明
-
-| 檔案/資料夾       | 說明 |
-|------------------|------|
-| `main.py`         | 主系統程式入口，整合偵測 + 傳送 |
-| `config.py`       | 設定顏色與動作對應關係 |
-| `detector.py`     | 圖像處理與形狀判斷邏輯 |
-| `signal_sender.py`| 控制 Serial 傳送與接收 |
-| `ui_basic.py`     | 顯示畫面與偵測結果 |
-| `test_sender.py`  | 單獨測試 Serial 傳輸模組 |
-| `BRG_Bar.py`      | 色彩選擇工具（拉條版） |
-| `OpenCV2Arduino/` | 放置攝影模組與調整工具 |
-| `Arduino2ARM/`    | Arduino 範例程式，接收指令與控制 |
 
 ---
 

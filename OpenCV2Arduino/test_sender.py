@@ -1,4 +1,4 @@
-from signal_sender import SignalSender
+from .signal_sender import SignalSender
 import time
 
 # 初始化 sender（請根據你的實際 port 調整）
