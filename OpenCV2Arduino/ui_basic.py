@@ -35,10 +35,12 @@ class AppUI:
             cv2.namedWindow("Blue Mask")
             cv2.moveWindow("Blue Mask", 650, 520)
 
-        # 顯示 label（若有）
         if label:
-            cv2.putText(left, f"Detected: {label}", (20, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 2)
+            if isinstance(label, list):
+                text = f"Detected: {label}"  # 多個 label
+            else:
+                text = f"Detected: {label}"
+            cv2.putText(left, text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 2)
 
         # 合併畫面（左：原圖 + 框，右：過濾結果）
         merged = cv2.hconcat([left, right])

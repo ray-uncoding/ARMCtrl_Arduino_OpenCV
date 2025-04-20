@@ -1,91 +1,95 @@
-import json
-from pathlib import Path
 import cv2
 import numpy as np
+import json
 import os
 
-# 建立空函式給 TrackBar 用
-def empty(v):
-    pass
+# 設定統一路徑（位於 OpenCV2Arduino 資料夾內）
+CONFIG_PATH = os.path.join("OpenCV2Arduino", "color_config.json")
 
-# 可編輯的顏色名稱
-editable_colors = ['Red', 'Blue']
-current_color = 'Red'
+class HSVAdjuster:
+    def __init__(self):
+        self.color_options = ["Red", "Blue"]
+        self.current_color_index = 0
+        self.color_name = self.color_options[self.current_color_index]
+        self.window_name = "HSV Adjust"
 
-# 建立 HSV 調整介面
-cv2.namedWindow("HSV Adjust", cv2.WINDOW_NORMAL)
-cv2.resizeWindow("HSV Adjust", 400, 300)
+        self.cap = cv2.VideoCapture(1)
+        if not self.cap.isOpened():
+            raise IOError("Cannot open webcam")
 
-# 加入顏色切換 TrackBar
-cv2.createTrackbar("Color (0=Red, 1=Blue)", "HSV Adjust", 0, len(editable_colors)-1, empty)
+        # 建立 Trackbars
+        cv2.namedWindow(self.window_name)
+        self._create_trackbars()
 
-# 建立 HSV 上下限 TrackBars
-for name in ['Hue Min', 'Hue Max', 'Sat Min', 'Sat Max', 'Val Min', 'Val Max']:
-    cv2.createTrackbar(name, "HSV Adjust", 0, 255, empty)
+        self.hsv_ranges = self._load_config()
 
-# 初始化預設值（可依照實測調整）
-initial_values = {
-    'Red': ([3, 105, 100], [17, 196, 157]),
-    'Blue': ([108, 117, 133], [125, 173, 195])
-}
+    def _create_trackbars(self):
+        cv2.createTrackbar("Hue Min", self.window_name, 0, 179, lambda x: None)
+        cv2.createTrackbar("Hue Max", self.window_name, 10, 179, lambda x: None)
+        cv2.createTrackbar("Sat Min", self.window_name, 100, 255, lambda x: None)
+        cv2.createTrackbar("Sat Max", self.window_name, 255, 255, lambda x: None)
+        cv2.createTrackbar("Val Min", self.window_name, 100, 255, lambda x: None)
+        cv2.createTrackbar("Val Max", self.window_name, 255, 255, lambda x: None)
 
-# 設定初始拉條位置
-for i, name in enumerate(['Hue Min', 'Sat Min', 'Val Min']):
-    cv2.setTrackbarPos(name, "HSV Adjust", initial_values[current_color][0][i])
-for i, name in enumerate(['Hue Max', 'Sat Max', 'Val Max']):
-    cv2.setTrackbarPos(name, "HSV Adjust", initial_values[current_color][1][i])
+    def _get_trackbar_values(self):
+        h_min = cv2.getTrackbarPos("Hue Min", self.window_name)
+        h_max = cv2.getTrackbarPos("Hue Max", self.window_name)
+        s_min = cv2.getTrackbarPos("Sat Min", self.window_name)
+        s_max = cv2.getTrackbarPos("Sat Max", self.window_name)
+        v_min = cv2.getTrackbarPos("Val Min", self.window_name)
+        v_max = cv2.getTrackbarPos("Val Max", self.window_name)
+        return [h_min, s_min, v_min], [h_max, s_max, v_max]
 
-# 開啟攝影機畫面預覽
-cap = cv2.VideoCapture(1)
+    def _load_config(self):
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH, 'r') as f:
+                return json.load(f)
+        return {}
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
+    def _save_config(self):
+        lower, upper = self._get_trackbar_values()
+        if self.color_name not in self.hsv_ranges:
+            self.hsv_ranges[self.color_name] = []
+        self.hsv_ranges[self.color_name].append(lower)
+        self.hsv_ranges[self.color_name].append(upper)
+        with open(CONFIG_PATH, 'w') as f:
+            json.dump(self.hsv_ranges, f, indent=4)
+        print(f"[{self.color_name}] HSV Range saved.")
 
-    # 更新目前編輯的顏色
-    current_color = editable_colors[cv2.getTrackbarPos("Color (0=Red, 1=Blue)", "HSV Adjust")]
+    def _switch_color(self):
+        self.current_color_index = (self.current_color_index + 1) % len(self.color_options)
+        self.color_name = self.color_options[self.current_color_index]
+        print(f"Switched to color: {self.color_name}")
 
-    # 取得 HSV 範圍
-    h_min = cv2.getTrackbarPos('Hue Min', "HSV Adjust")
-    h_max = cv2.getTrackbarPos('Hue Max', "HSV Adjust")
-    s_min = cv2.getTrackbarPos('Sat Min', "HSV Adjust")
-    s_max = cv2.getTrackbarPos('Sat Max', "HSV Adjust")
-    v_min = cv2.getTrackbarPos('Val Min', "HSV Adjust")
-    v_max = cv2.getTrackbarPos('Val Max', "HSV Adjust")
+    def run(self):
+        while True:
+            ret, frame = self.cap.read()
+            if not ret:
+                break
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            lower, upper = self._get_trackbar_values()
+            mask = cv2.inRange(hsv, np.array(lower), np.array(upper))
+            result = cv2.bitwise_and(frame, frame, mask=mask)
 
-    # 顯示即時濾色效果
-    blurred = cv2.GaussianBlur(frame, (5, 5), 0)
-    hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-    lower = np.array([h_min, s_min, v_min])
-    upper = np.array([h_max, s_max, v_max])
-    mask = cv2.inRange(hsv, lower, upper)
-    result = cv2.bitwise_and(frame, frame, mask=mask)
+            # Resize output for visibility
+            vis = np.hstack((frame, result))
+            cv2.imshow("Preview", vis)
 
-    combined = np.hstack((frame, result))
-    cv2.imshow("Preview", combined)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('s'):
+                self._save_config()
+            elif key == ord('q'):
+                break
+            elif key == ord('r'):
+                self.color_name = "Red"
+                print("Switched to Red")
+            elif key == ord('b'):
+                self.color_name = "Blue"
+                print("Switched to Blue")
 
-    key = cv2.waitKey(1)
-    # 儲存邏輯（trigger：按下 s 鍵）
-    if key == ord('s'):
-        color_config_path = Path(__file__).parent / "OpenCV2Arduino" / "color_config.json"
+        self.cap.release()
+        cv2.destroyAllWindows()
 
-        new_data = {}
-        for color in editable_colors:
-            if color == current_color:
-                lower = [h_min, s_min, v_min]
-                upper = [h_max, s_max, v_max]
-                new_data[color] = [lower, upper]
-            else:
-                new_data[color] = initial_values[color]
-
-        with open(color_config_path, "w", encoding="utf-8") as f:
-            json.dump(new_data, f, indent=4)
-
-        print(f"[Saved] HSV value for '{current_color}' updated in color_config.json.")
-
-    elif key == ord('q'):  # 離開
-        break
-
-cap.release()
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    adjuster = HSVAdjuster()
+    adjuster.run()

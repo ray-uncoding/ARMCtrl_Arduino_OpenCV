@@ -7,7 +7,7 @@ BAUD_RATE = 9600
 
 
 def main():
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(1)
 
     sender = SignalSender(port=COM_PORT, baudrate=BAUD_RATE)
     ui = AppUI()
@@ -33,7 +33,6 @@ def main():
         for label in labels:
             state_manager.update(label)
 
-        # 詢問：現在有穩定結果嗎？
         stable_label = state_manager.get_stable_label()
         if stable_label:
             print(f"[Main] 穩定觸發：{stable_label}")
