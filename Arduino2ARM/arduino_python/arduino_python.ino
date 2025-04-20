@@ -5,7 +5,8 @@ const int relay_channal_4 = 11;
 const int test_ledPin     = 13;
 
 #define BUADRATE 9600
-bool NPN_mode = true;   //默認機台IO口為NPN, 要修改就反過來
+bool INVERSE = true;   //默認機台IO口為NPN, 要修改就反過來
+//bool INVERSE = false;
 
 char val;
 
@@ -91,7 +92,7 @@ void test_led() {
 }
 
 void relay_output(int IN_1, int IN_2, int IN_3, int IN_4){
-  if (NPN_mode){
+  if (INVERSE){
     IN_1 = !IN_1;
     IN_2 = !IN_2;
     IN_3 = !IN_3;
