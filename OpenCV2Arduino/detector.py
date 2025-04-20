@@ -18,6 +18,12 @@ def detect_target(frame):
         mask = cv2.inRange(hsv, lower_np, upper_np)
         mask_total = cv2.bitwise_or(mask_total, mask)  # 結合所有 mask 畫面用
 
+            # 顯示個別遮罩畫面
+        if color_name == "Red":
+            cv2.imshow("Red Mask", mask)
+        elif color_name == "Blue":
+            cv2.imshow("Blue Mask", mask)
+        
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         for cnt in contours:

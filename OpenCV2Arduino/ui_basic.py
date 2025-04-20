@@ -18,6 +18,28 @@ class AppUI:
             cv2.putText(left, f"Detected: {label}", (20, 40),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 2)
 
+        # 顯示主畫面（左：原圖 + 框 右：遮罩結果）
+        merged = cv2.hconcat([left, right])
+        cv2.imshow(self.window_name, merged)
+
+        # 額外顯示紅藍遮罩畫面
+        if cv2.getWindowProperty("Red Mask", 0) >= 0:
+            pass  # 已存在，不需再建立
+        else:
+            cv2.namedWindow("Red Mask")
+            cv2.moveWindow("Red Mask", 0, 520)
+
+        if cv2.getWindowProperty("Blue Mask", 0) >= 0:
+            pass
+        else:
+            cv2.namedWindow("Blue Mask")
+            cv2.moveWindow("Blue Mask", 650, 520)
+
+        # 顯示 label（若有）
+        if label:
+            cv2.putText(left, f"Detected: {label}", (20, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 2)
+
         # 合併畫面（左：原圖 + 框，右：過濾結果）
         merged = cv2.hconcat([left, right])
         cv2.imshow(self.window_name, merged)

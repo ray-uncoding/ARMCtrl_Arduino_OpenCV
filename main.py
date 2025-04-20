@@ -2,12 +2,13 @@
 import cv2
 from OpenCV2Arduino import detect_target, SignalSender, AppUI, StateManager
 
-COM_PORT = 'COM5'
+COM_PORT = 'COM11'
 BAUD_RATE = 9600
 
 
 def main():
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
+
     sender = SignalSender(port=COM_PORT, baudrate=BAUD_RATE)
     ui = AppUI()
 
