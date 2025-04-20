@@ -13,7 +13,7 @@ class HSVAdjuster:
         self.color_name = self.color_options[self.current_color_index]
         self.window_name = "HSV Adjust"
 
-        self.cap = cv2.VideoCapture(1)
+        self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
             raise IOError("Cannot open webcam")
 
@@ -48,10 +48,8 @@ class HSVAdjuster:
 
     def _save_config(self):
         lower, upper = self._get_trackbar_values()
-        if self.color_name not in self.hsv_ranges:
-            self.hsv_ranges[self.color_name] = []
-        self.hsv_ranges[self.color_name].append(lower)
-        self.hsv_ranges[self.color_name].append(upper)
+        # 覆蓋原本的設定，清除舊的上下限
+        self.hsv_ranges[self.color_name] = [lower, upper]
         with open(CONFIG_PATH, 'w') as f:
             json.dump(self.hsv_ranges, f, indent=4)
         print(f"[{self.color_name}] HSV Range saved.")
