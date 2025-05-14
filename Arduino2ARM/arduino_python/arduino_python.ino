@@ -1,11 +1,12 @@
-const int relay_channal_1 = 8;
-const int relay_channal_2 = 9;
-const int relay_channal_3 = 10;
-const int relay_channal_4 = 11;
+const int relay_channal_1 = 11;
+const int relay_channal_2 = 10;
+const int relay_channal_3 = 9;
+const int relay_channal_4 = 8;
 const int test_ledPin     = 13;
 
 #define BUADRATE 9600
-bool INVERSE = true;   //默認機台IO口為NPN, 要修改就反過來
+
+bool INVERSE = true;   
 //bool INVERSE = false;
 
 char val;
@@ -36,6 +37,7 @@ void loop() {
       relay_output(0, 0, 0, 1);   //發送訊號拿取
       delay(3000);                //維持訊號
       relay_output(0, 0, 0, 0);   //釋放訊號
+
       eat_signal();               //吃掉多餘訊號
       val = 'n';                  //阻回
       break;

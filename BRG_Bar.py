@@ -13,7 +13,9 @@ class HSVAdjuster:
         self.color_name = self.color_options[self.current_color_index]
         self.window_name = "HSV Adjust"
 
-        self.cap = cv2.VideoCapture(0)
+        #self.cap = cv2.VideoCapture("http://admin:admin@192.168.164.81:8081/video")
+        self.cap = cv2.VideoCapture(1)
+        
         if not self.cap.isOpened():
             raise IOError("Cannot open webcam")
 
