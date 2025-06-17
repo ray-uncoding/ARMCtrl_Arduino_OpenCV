@@ -7,7 +7,12 @@ from .feature_validator import validate_shape
 from .confidence_scorer import compute_confidence
 
 def detect_target(frame, color_ranges_to_use, show_debug_windows=False):
+    # Directly convert frame to HSV without Gaussian Blur
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    # Initialize kernel for morphological operations
+    kernel = np.ones((2, 2), np.uint8)  # Reduced kernel size
+
     result_frame = frame.copy()
     mask_total = np.zeros(hsv.shape[:2], dtype=np.uint8)
     detected_labels = []
@@ -16,6 +21,11 @@ def detect_target(frame, color_ranges_to_use, show_debug_windows=False):
         lower_np = np.array(lower)
         upper_np = np.array(upper)
         mask = cv2.inRange(hsv, lower_np, upper_np)
+
+        # Apply morphological operations with reduced intensity
+        mask = cv2.dilate(mask, kernel, iterations=1)  # Reduced iterations
+        mask = cv2.erode(mask, kernel, iterations=1)  # Reduced iterations
+
         mask_total = cv2.bitwise_or(mask_total, mask)
 
         if show_debug_windows:
