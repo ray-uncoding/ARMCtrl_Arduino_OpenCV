@@ -104,7 +104,8 @@ def main():
 
 
             # Process frame, detect targets, and control arm using live_color_ranges
-            result_frame, labels, mask, stable_label = process_frame_and_control_arm(
+            # Corrected unpacking to match the 3 return values from process_frame_and_control_arm
+            result_frame, labels, mask = process_frame_and_control_arm(
                 frame, state_manager, arm_controller, live_color_ranges, # Pass live ranges
                 show_debug_windows=args.show_debug_masks
             )
