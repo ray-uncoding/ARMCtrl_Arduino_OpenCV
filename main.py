@@ -7,7 +7,7 @@ BAUD_RATE = 9600
 
 def main():
     #cap = cv2.VideoCapture("http://admin:admin@192.168.164.81:8081/video")
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
     
     sender = SignalSender(port=COM_PORT, baudrate=BAUD_RATE)
     ui = AppUI()
