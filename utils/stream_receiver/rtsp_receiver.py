@@ -1,4 +1,3 @@
-'''
 import cv2
 import threading
 import time
@@ -85,7 +84,7 @@ if __name__ == '__main__':
     # RTSP 串流 URL (請替換為您的樹莓派 RTSP 串流 URL)
     # 預設的 rtsp_pusher.py 推流 URL 是 rtsp://localhost:8554/live
     # 如果您在不同機器上執行接收器，請將 localhost 替換為樹莓派的 IP 位址
-    RTSP_URL = "rtsp://<樹莓派的IP位址>:8554/live" # 例如 "rtsp://192.168.1.100:8554/live"
+    RTSP_URL = "rtsp://192.168.34.63:8554/live" # 例如 "rtsp://192.168.1.100:8554/live"
 
     print(f"嘗試從 {RTSP_URL} 接收 RTSP 串流...")
     receiver = RTSPReceiver(RTSP_URL)
@@ -112,4 +111,3 @@ if __name__ == '__main__':
         receiver.stop()
         cv2.destroyAllWindows()
         print("程式結束。")
-'''

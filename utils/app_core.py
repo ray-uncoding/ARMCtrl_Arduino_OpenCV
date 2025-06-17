@@ -7,7 +7,8 @@ import os
 # Ensure relative import is correct
 from .arm_controller.pi_gpio_controller import PiGPIOController, RPI_GPIO_AVAILABLE 
 # Updated import path for vision_processing
-from .vision_processing import detect_target, StateManager, config as vision_config # Import config
+from .vision_processing import detect_target, config as vision_config # Import config
+from .vision_processing.state_manager import StateManager
 
 # --- Default GPIO Pin configurations (BCM Mode) ---
 DEFAULT_RELAY_PINS = [17, 27, 22, 23]
@@ -99,27 +100,42 @@ def initialize_arm_controller(args):
 
 def process_frame_and_control_arm(frame, state_manager, arm_controller, current_color_ranges, show_debug_windows=False):
     """Processes a single frame for target detection and controls the arm."""
-    # Pass current_color_ranges to detect_target
-    result_frame, labels, mask = detect_target(frame.copy(), current_color_ranges, show_debug_windows=show_debug_windows)
+    # detect_target now returns labels like ['A', 'B'] based on color+shape and action_map
+    result_frame, detected_actions, mask = detect_target(frame.copy(), current_color_ranges, show_debug_windows=show_debug_windows)
 
-    # Example: Control arm based on the first detected label's state
-    # This logic needs to be refined based on actual requirements
-    if labels:
-        # This is a placeholder. You'll need to decide how to map labels to arm actions.
-        # For example, if a "red" object is detected, move arm to position 1.
-        # The current `labels` list contains color names.
-        # The `state_manager` can be used to avoid rapid/repeated actions.
-        
-        # Example: if arm_controller is not None and RPI_GPIO_AVAILABLE:
-        # first_label = labels[0] # Get the first detected color
-        # if first_label == "red":
-        # if state_manager.can_perform_action("move_to_red_pos", cooldown_seconds=2):
-        # print(f"[Core] Detected {first_label}, triggering action.")
-        # arm_controller.move_to_position_by_name("pickup") # Example action
-        # pass
-        pass # Implement arm control logic here
+    if detected_actions and arm_controller: # Ensure arm_controller is not None and actions were detected
+        # Process the first detected action
+        # In a real scenario, you might need a more sophisticated way to prioritize if multiple actions are detected
+        first_action_label = detected_actions[0] # e.g., 'A', 'B', 'C', or 'D'
 
-    return result_frame, labels, mask # Return mask as well for potential future use
+        action_to_perform_method = None
+        action_name_for_state_manager = None
+
+        if first_action_label == 'A':
+            action_to_perform_method = arm_controller.trigger_action_A
+            action_name_for_state_manager = "action_A"
+        elif first_action_label == 'B':
+            action_to_perform_method = arm_controller.trigger_action_B
+            action_name_for_state_manager = "action_B"
+        elif first_action_label == 'C':
+            action_to_perform_method = arm_controller.trigger_action_C
+            action_name_for_state_manager = "action_C"
+        elif first_action_label == 'D':
+            action_to_perform_method = arm_controller.trigger_action_D
+            action_name_for_state_manager = "action_D"
+
+        if action_to_perform_method and action_name_for_state_manager:
+            if state_manager.can_perform_action(action_name_for_state_manager, cooldown_seconds=7):
+                print(f"[Core] Detected action '{first_action_label}', triggering {action_name_for_state_manager}.")
+                action_to_perform_method() # Execute the arm action method
+                state_manager.reset_action_cooldown(action_name_for_state_manager)  # Ensure cooldown is reset after action
+            else:
+                print(f"[Core] Detected action '{first_action_label}', but {action_name_for_state_manager} is on cooldown.")
+                action_to_perform_method = None  # Ensure no action is performed during cooldown
+        elif detected_actions: # An action label was detected but not mapped to a method
+            print(f"[Core] Detected action label '{first_action_label}' has no defined arm trigger method.")
+
+    return result_frame, detected_actions, mask # Return detected_actions (e.g. ['A', 'B']) instead of raw color labels
 
 def cleanup_resources(cap, arm_controller):
     """Releases camera and cleans up GPIO resources."""

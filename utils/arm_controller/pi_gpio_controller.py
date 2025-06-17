@@ -95,17 +95,76 @@ class PiGPIOController:
         self.all_relays_off()
         print(f"[PiGPIOController] {action_name} - Relays deactivated. Sequence complete.")
 
+    def _execute_arm_sequence_async(self, r1, r2, r3, r4, action_name=""):
+        """
+        Executes the arm sequence asynchronously to avoid blocking the main loop.
+        """
+        import threading
+
+        def sequence():
+            print(f"[PiGPIOController] Executing {action_name} sequence...")
+            self._set_all_relays(r1, r2, r3, r4)
+            print(f"[PiGPIOController] {action_name} - Relays activated.")
+            time.sleep(3)  # Maintain signal
+            self.all_relays_off()
+            print(f"[PiGPIOController] {action_name} - Relays deactivated. Sequence complete.")
+
+        threading.Thread(target=sequence).start()
+
+    def _execute_arm_sequence_with_encoding(self, r1, r2, r3, r4, action_name=""):
+        """
+        Executes the arm sequence using R1 as the trigger and R2, R3, R4 as encoded signals.
+        """
+        import threading
+
+        def sequence():
+            print(f"[PiGPIOController] Executing {action_name} sequence with encoding...")
+            self._set_relay_state(0, True)  # R1 high to indicate valid signal
+            self._set_relay_state(1, r2)   # R2
+            self._set_relay_state(2, r3)   # R3
+            self._set_relay_state(3, r4)   # R4
+            print(f"[PiGPIOController] {action_name} - Signal encoded: R1:{True}, R2:{r2}, R3:{r3}, R4:{r4}.")
+            time.sleep(0.5)  # Maintain signal for 0.5 seconds
+            self.all_relays_off()
+            print(f"[PiGPIOController] {action_name} - Relays deactivated. Sequence complete.")
+
+        threading.Thread(target=sequence).start()
+
+    def _execute_arm_sequence_with_protocol(self, r2, r3, r4, action_name=""):
+        """
+        Executes the arm sequence with a protocol ensuring reliable signal transmission.
+        """
+        import threading
+
+        def sequence():
+            print(f"[PiGPIOController] Preparing {action_name} sequence...")
+            self._set_relay_state(0, False)  # R1 low to indicate signal not ready
+            self._set_relay_state(1, r2)     # R2
+            self._set_relay_state(2, r3)     # R3
+            self._set_relay_state(3, r4)     # R4
+            print(f"[PiGPIOController] {action_name} - Signal encoded: R1:{False}, R2:{r2}, R3:{r3}, R4:{r4}.")
+            time.sleep(1)  # Wait 1 second before activating R1
+
+            self._set_relay_state(0, True)  # R1 high to indicate valid signal
+            print(f"[PiGPIOController] {action_name} - Signal activated: R1:{True}, R2:{r2}, R3:{r3}, R4:{r4}.")
+            time.sleep(7)  # Maintain signal for 7 seconds
+
+            self.all_relays_off()  # Reset all relays to low
+            print(f"[PiGPIOController] {action_name} - Relays deactivated. Sequence complete.")
+
+        threading.Thread(target=sequence).start()
+
     def trigger_action_A(self): # Corresponds to Arduino 'A' -> 0001
-        self._execute_arm_sequence(False, False, False, True, "Action A (Relay 4 ON)")
+        self._execute_arm_sequence_with_protocol(False, False, True, "Action A (Encoded: 001)")
 
     def trigger_action_B(self): # Corresponds to Arduino 'B' -> 0010
-        self._execute_arm_sequence(False, False, True, False, "Action B (Relay 3 ON)")
+        self._execute_arm_sequence_with_protocol(False, True, False, "Action B (Encoded: 010)")
 
     def trigger_action_C(self): # Corresponds to Arduino 'C' -> 0011
-        self._execute_arm_sequence(False, False, True, True, "Action C (Relays 3+4 ON)")
+        self._execute_arm_sequence_with_protocol(False, True, True, "Action C (Encoded: 011)")
 
     def trigger_action_D(self): # Corresponds to Arduino 'D' -> 0100
-        self._execute_arm_sequence(False, True, False, False, "Action D (Relay 2 ON)")
+        self._execute_arm_sequence_with_protocol(True, False, False, "Action D (Encoded: 100)")
 
     def run_test_led_sequence(self):
         if not self.rpi_gpio_available or not self.led_pin:
