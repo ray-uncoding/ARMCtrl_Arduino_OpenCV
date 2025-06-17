@@ -1,179 +1,145 @@
 import cv2
 import subprocess
 import numpy as np
-import threading
 import time
 
 class RTSPPusher:
-    def __init__(self, camera_id=0, width=640, height=480, fps=30, rtsp_url="rtsp://0.0.0.0:8554/live"):
-        self.camera_id = camera_id
+    def __init__(self, rtsp_url, width=640, height=480, fps=20):
+        self.rtsp_url = rtsp_url
         self.width = width
         self.height = height
         self.fps = fps
-        self.rtsp_url = rtsp_url
-        self.ffmpeg_process = None
-        self.cap = None
-        self._running = False
-        self._thread = None
-
-        print(f"[RTSPPusher] Initialized with camera_id={camera_id}, resolution={width}x{height}, fps={fps}, rtsp_url={rtsp_url}")
+        self.process = None
+        print(f"[RTSPPusher] Initializing for RTSP URL: {self.rtsp_url}, Resolution: {self.width}x{self.height}, FPS: {self.fps}")
+        self._start_ffmpeg()
 
     def _start_ffmpeg(self):
         command = [
             'ffmpeg',
-            '-y',  # Overwrite output file if it exists
+            '-y',  # Overwrite output files without asking
             '-f', 'rawvideo',
             '-vcodec', 'rawvideo',
-            '-pix_fmt', 'bgr24',  # OpenCV default pixel format
+            '-pix_fmt', 'bgr24',  # OpenCV uses BGR
             '-s', f'{self.width}x{self.height}',
             '-r', str(self.fps),
             '-i', '-',  # Input from stdin
-            '-an',  # No audio
             '-c:v', 'libx264',
-            '-preset', 'ultrafast',  # For low latency
+            '-pix_fmt', 'yuv420p',
+            '-preset', 'veryfast', # Changed from ultrafast
+            '-b:v', '1M', # Added bitrate limit to 1 Mbps, adjust as needed
             '-tune', 'zerolatency',
-            '-pix_fmt', 'yuv420p', # Common format for H.264
             '-f', 'rtsp',
-            '-rtsp_transport', 'tcp', # Use TCP for more reliability over local networks
+            '-rtsp_transport', 'tcp', # Prefer TCP for reliability
             self.rtsp_url
         ]
-        print(f"[RTSPPusher] Starting FFmpeg with command: {' '.join(command)}")
         try:
-            self.ffmpeg_process = subprocess.Popen(command, stdin=subprocess.PIPE)
-            print("[RTSPPusher] FFmpeg process started.")
+            # Using stderr=subprocess.PIPE to capture FFmpeg errors
+            self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+            print(f"FFmpeg process starting for RTSP stream: {self.rtsp_url}")
+            print(f"FFmpeg command: {' '.join(command)}")
         except FileNotFoundError:
-            print("[RTSPPusher] ERROR: FFmpeg command not found. Please ensure FFmpeg is installed and in your PATH.")
-            self.ffmpeg_process = None
+            print("Error: ffmpeg command not found. Please ensure FFmpeg is installed and in your PATH.")
+            self.process = None
         except Exception as e:
-            print(f"[RTSPPusher] ERROR: Failed to start FFmpeg: {e}")
-            self.ffmpeg_process = None
+            print(f"Error starting FFmpeg: {e}")
+            self.process = None
 
-
-    def start_capture(self):
-        print(f"[RTSPPusher] Attempting to open camera: {self.camera_id}")
-        self.cap = cv2.VideoCapture(self.camera_id)
-        if not self.cap.isOpened():
-            print(f"[RTSPPusher] ERROR: Cannot open camera {self.camera_id}")
-            return False
-        
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-        self.cap.set(cv2.CAP_PROP_FPS, self.fps)
-        
-        # Verify settings
-        actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        actual_fps = self.cap.get(cv2.CAP_PROP_FPS)
-        print(f"[RTSPPusher] Camera opened. Actual resolution: {actual_width}x{actual_height}, FPS: {actual_fps}")
-        
-        # It's possible the camera doesn't support the exact settings
-        # Update width/height/fps if they differ, so FFmpeg gets correct parameters
-        self.width = actual_width
-        self.height = actual_height
-        # Some cameras might not report FPS correctly or allow setting it, use configured if zero
-        self.fps = actual_fps if actual_fps > 0 else self.fps
-
-        return True
-
-    def _run(self):
-        if not self.start_capture():
-            self._running = False
-            print("[RTSPPusher] Failed to start camera capture. Stopping.")
-            return
-
-        self._start_ffmpeg()
-        if not self.ffmpeg_process or self.ffmpeg_process.stdin is None:
-            print("[RTSPPusher] FFmpeg process not started correctly. Stopping.")
-            self._running = False
-            if self.cap.isOpened():
-                self.cap.release()
-            return
-
-        print("[RTSPPusher] Starting to push frames...")
-        while self._running and self.cap.isOpened():
-            ret, frame = self.cap.read()
-            if not ret:
-                print("[RTSPPusher] Failed to grab frame. End of stream?" )
-                time.sleep(0.1) # Wait a bit before retrying or exiting
-                # Check if camera is still there
-                if not self.cap.isOpened():
-                    print("[RTSPPusher] Camera disconnected.")
-                    break
-                continue
-
-            if self.ffmpeg_process and self.ffmpeg_process.stdin:
-                try:
-                    # Ensure frame is in the correct dimensions if camera settings changed
-                    if frame.shape[1] != self.width or frame.shape[0] != self.height:
-                        frame = cv2.resize(frame, (self.width, self.height))
-                    
-                    self.ffmpeg_process.stdin.write(frame.tobytes())
-                except IOError as e:
-                    print(f"[RTSPPusher] FFmpeg stdin write error: {e}. FFmpeg might have closed.")
-                    break
-                except Exception as e:
-                    print(f"[RTSPPusher] Error writing frame to FFmpeg: {e}")
-                    break
+    def push_frame(self, frame):
+        if not self.process or self.process.stdin is None:
+            # Check if the process has terminated
+            if self.process and self.process.poll() is not None:
+                print("FFmpeg process has terminated. Attempting to read stderr...")
+                self._handle_ffmpeg_errors() # Read errors from terminated process
+                print("Attempting to restart FFmpeg...")
+                self.release() # Clean up existing process before restarting
+                self._start_ffmpeg() # Restart FFmpeg
+                if not self.process or self.process.stdin is None:
+                    print("Failed to restart FFmpeg. Cannot push frame.")
+                    return
             else:
-                print("[RTSPPusher] FFmpeg process not available to write frame.")
-                break
-        
-        print("[RTSPPusher] Frame pushing loop ended.")
-        self.stop()
+                print("FFmpeg process not running or stdin not available, and not terminated. Cannot push frame.")
+                return
 
-
-    def start(self):
-        if self._running:
-            print("[RTSPPusher] Pusher is already running.")
+        if frame is None:
+            print("Received an empty frame. Skipping.")
             return
-        self._running = True
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
-        print("[RTSPPusher] Pusher thread started.")
 
-    def stop(self):
-        print("[RTSPPusher] Attempting to stop pusher...")
-        self._running = False
-        if self._thread is not None and self._thread.is_alive():
-            print("[RTSPPusher] Waiting for pusher thread to join...")
-            self._thread.join(timeout=5) # Wait for 5 seconds
-            if self._thread.is_alive():
-                print("[RTSPPusher] Pusher thread did not join in time.")
-        
-        if self.cap is not None and self.cap.isOpened():
-            print("[RTSPPusher] Releasing camera...")
-            self.cap.release()
-            self.cap = None
-        
-        if self.ffmpeg_process is not None:
-            print("[RTSPPusher] Terminating FFmpeg process...")
-            if self.ffmpeg_process.stdin:
-                try:
-                    self.ffmpeg_process.stdin.close()
-                except Exception as e:
-                    print(f"[RTSPPusher] Error closing FFmpeg stdin: {e}")
+        try:
+            resized_frame = cv2.resize(frame, (self.width, self.height))
+            self.process.stdin.write(resized_frame.tobytes())
+            self.process.stdin.flush() # Ensure data is sent immediately
+        except BrokenPipeError:
+            print("BrokenPipeError: FFmpeg process may have terminated unexpectedly.")
+            self._handle_ffmpeg_errors()
+            print("Attempting to restart FFmpeg due to BrokenPipeError...")
+            self.release()
+            self._start_ffmpeg()
+        except Exception as e:
+            print(f"Error writing frame to FFmpeg: {e}")
+            # You might want to add more specific error handling or restart logic here
+
+    def _handle_ffmpeg_errors(self):
+        if self.process and self.process.stderr:
             try:
-                self.ffmpeg_process.terminate() # Send SIGTERM
-                self.ffmpeg_process.wait(timeout=5) # Wait for termination
-            except subprocess.TimeoutExpired:
-                print("[RTSPPusher] FFmpeg did not terminate gracefully, killing...")
-                self.ffmpeg_process.kill() # Send SIGKILL
-                self.ffmpeg_process.wait()
+                # Non-blocking read if possible, or ensure this doesn't hang
+                ffmpeg_errors = self.process.stderr.read()
+                if ffmpeg_errors:
+                    print(f"FFmpeg stderr output:\n{ffmpeg_errors.decode('utf-8', errors='ignore')}")
             except Exception as e:
-                print(f"[RTSPPusher] Error terminating FFmpeg: {e}")
-            self.ffmpeg_process = None
-        print("[RTSPPusher] Pusher stopped.")
+                print(f"Error reading FFmpeg stderr: {e}")
 
-# Example usage:
+    def release(self):
+        if self.process:
+            print("Stopping FFmpeg process...")
+            if self.process.stdin:
+                try:
+                    self.process.stdin.close()
+                except Exception as e:
+                    print(f"Error closing FFmpeg stdin: {e}")
+            
+            # Read any remaining stderr output before terminating
+            self._handle_ffmpeg_errors()
+
+            if self.process.poll() is None:  # Check if process is still running
+                print("Terminating FFmpeg process...")
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=5)
+                    print("FFmpeg process terminated.")
+                except subprocess.TimeoutExpired:
+                    print("FFmpeg did not terminate gracefully, killing.")
+                    self.process.kill()
+                    self.process.wait() # Ensure kill is processed
+                    print("FFmpeg process killed.")
+                except Exception as e:
+                    print(f"Exception during FFmpeg process termination: {e}")
+                    if self.process.poll() is None:
+                        print("FFmpeg still running after exception, attempting kill.")
+                        self.process.kill()
+                        self.process.wait()
+                        print("FFmpeg process killed after exception.")
+            else:
+                print(f"FFmpeg process already terminated with code: {self.process.poll()}")
+
+            if self.process.stderr: # Ensure stderr is closed
+                 try:
+                    self.process.stderr.close()
+                 except Exception as e:
+                    print(f"Error closing FFmpeg stderr: {e}")
+            
+            self.process = None
+            print("FFmpeg resources released.")
+
+# Test block
 if __name__ == '__main__':
-    RTSP_SERVER_IP = '0.0.0.0' # Listen on all available network interfaces on the Pi
+    RTSP_SERVER_IP = '127.0.0.1'  # Changed from 0.0.0.0 to 127.0.0.1
     RTSP_PORT = 8554
     RTSP_PATH = '/live'
     rtsp_url = f'rtsp://{RTSP_SERVER_IP}:{RTSP_PORT}{RTSP_PATH}'
 
-    # Attempt to determine a suitable camera index
     camera_index = -1
-    for i in range(5): # Try indices 0 through 4
+    print("Searching for camera...")
+    for i in range(5):
         cap_test = cv2.VideoCapture(i)
         if cap_test.isOpened():
             print(f"Camera found at index {i}")
@@ -183,7 +149,7 @@ if __name__ == '__main__':
         cap_test.release()
 
     if camera_index == -1:
-        print("Error: No camera found. Please ensure a camera is connected.")
+        print("Error: No camera found. Please ensure a camera is connected and permissions are correct (e.g., /dev/video0).")
         exit()
         
     cap = cv2.VideoCapture(camera_index)
@@ -194,37 +160,51 @@ if __name__ == '__main__':
 
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    # Use a common FPS if camera FPS is too low or high, or zero
-    fps = fps if 5 <= fps <= 60 else 20
+    raw_fps = cap.get(cv2.CAP_PROP_FPS)
+    # Use a common FPS if camera FPS is too low or high, or zero, or invalid
+    fps = int(raw_fps if raw_fps and 5 <= raw_fps <= 120 else 20)
 
-
-    print(f"Camera opened successfully: {frame_width}x{frame_height} @ {fps} FPS (will be resized for streaming)")
+    print(f"Camera opened successfully: {frame_width}x{frame_height} @ {fps} FPS (Reported by camera: {raw_fps})")
     
-    # Initialize pusher with desired streaming resolution
-    # Using a smaller resolution for streaming to save bandwidth/CPU
     stream_width = 640
     stream_height = 480
-    pusher = RTSPPusher(rtsp_url, width=stream_width, height=stream_height, fps=fps)
+    stream_fps = fps # Use camera's FPS for streaming, or the adjusted one
+    
+    pusher = RTSPPusher(rtsp_url, width=stream_width, height=stream_height, fps=stream_fps)
+
+    # Check if FFmpeg started successfully
+    if pusher.process is None or pusher.process.poll() is not None:
+        print("FFmpeg process failed to start or terminated prematurely. Exiting.")
+        if pusher.process: # if it exists but terminated, try to get error
+             pusher._handle_ffmpeg_errors()
+        cap.release()
+        exit()
+
+    frame_count = 0
+    start_time = time.time()
+    pusher_instance = pusher # Keep a reference for the finally block
 
     try:
         while True:
             ret, frame = cap.read()
             if not ret or frame is None:
-                print("Error: Can't receive frame (stream end?). Exiting ...")
+                print("Error: Can't receive frame (stream end or camera error?). Exiting ...")
+                if not cap.isOpened():
+                    print("Camera is no longer opened.")
                 break
 
-            # Display the frame locally on the Pi (if X11 forwarding is working or a display is connected)
-            # cv2.imshow('Pushing to RTSP...', frame) # Comment out if no display
-            
-            pusher.push_frame(frame)
+            pusher_instance.push_frame(frame) # Use the instance here
+            frame_count += 1
 
-            # Check for 'q' key press to quit (only works if cv2.imshow is active and window is focused)
-            # if cv2.waitKey(1) & 0xFF == ord('q'):
-            #     print("'q' pressed, stopping.")
-            #     break
-            # Add a small delay to control frame rate if needed, though ffmpeg -r should handle it
-            # time.sleep(1/fps)
+            if frame_count % (stream_fps * 5) == 0: # Every 5 seconds approx
+                elapsed_time = time.time() - start_time
+                current_fps = frame_count / elapsed_time if elapsed_time > 0 else 0
+                # print(f"Streaming... {frame_count} frames pushed. Actual avg FPS: {current_fps:.2f}")
+                # Check FFmpeg process status
+                if pusher_instance.process and pusher_instance.process.poll() is not None:
+                    print(f"FFmpeg process has terminated unexpectedly with code {pusher_instance.process.poll()}.")
+                    pusher_instance._handle_ffmpeg_errors()
+                    break
 
 
     except KeyboardInterrupt:
@@ -235,8 +215,9 @@ if __name__ == '__main__':
         print("Releasing resources...")
         if 'cap' in locals() and cap.isOpened():
             cap.release()
-        if 'pusher' in locals():
-            pusher.release()
-        # cv2.destroyAllWindows() # Comment out if no display
-        print("Resources released. Exiting.")
+            print("Camera released.")
+        # Ensure pusher_instance is used here and it's not None
+        if 'pusher_instance' in locals() and pusher_instance is not None:
+            pusher_instance.release()
+        print("All resources released. Exiting.")
 
