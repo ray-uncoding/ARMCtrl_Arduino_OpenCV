@@ -10,12 +10,22 @@ COLOR_CONFIG_PATH = Path(__file__).parent / "color_config.json"
 # Global variable to hold color ranges, initialized by load_color_ranges
 color_ranges = {}
 
+# Default color ranges
+DEFAULT_COLOR_RANGES = {
+    "Red": [[136, 150, 120], [179, 255, 235]],
+    "Blue": [[95, 42, 45], [158, 255, 255]],
+    "Green": [[40, 100, 100], [80, 255, 255]],  # 新增
+}
+
+#更改
 # color + shape -> corresponding control command
 action_map = {
     ('Red', 'Triangle'): 'A',
     ('Red', 'Square'): 'B',
     ('Blue', 'Triangle'): 'C',
     ('Blue', 'Square'): 'D',
+    ('Green', 'Triangle'): 'E',   # 新增
+    ('Green', 'Square'): 'F',     # 新增
 }
 
 def load_color_ranges():

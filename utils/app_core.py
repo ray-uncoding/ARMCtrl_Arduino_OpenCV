@@ -123,6 +123,12 @@ def process_frame_and_control_arm(frame, state_manager, arm_controller, current_
         elif first_action_label == 'D':
             action_to_perform_method = arm_controller.trigger_action_D
             action_name_for_state_manager = "action_D"
+        elif first_action_label == 'E':
+            action_to_perform_method = arm_controller.trigger_action_E
+            action_name_for_state_manager = "action_E"
+        elif first_action_label == 'F':
+            action_to_perform_method = arm_controller.trigger_action_F
+            action_name_for_state_manager = "action_F"
 
         if action_to_perform_method and action_name_for_state_manager:
             if state_manager.can_perform_action(action_name_for_state_manager, cooldown_seconds=7):
