@@ -21,7 +21,7 @@
 
 ## 安裝需求
 
--Python:3.9.0~3.11.9
+- **Python： 3.9.0 ~ 3.11.9**
 - OpenCV (`opencv-python`)
 - Pillow (`pillow`)
 - numpy
