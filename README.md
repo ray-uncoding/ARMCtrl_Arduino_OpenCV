@@ -50,38 +50,7 @@ python main_local.py
 - 可儲存 HSV 設定
 - 可進入自動模式（無 UI 持續辨識）
 
-### 3. 控制器切換
 
-- **預設為樹莓派控制（PiGPIOController）**
-- 若要用 Arduino 測試，請在 `utils/arm_controller/pi_gpio_controller.py` 最下方啟用 `ArduinoTestController`，並於主程式初始化時使用：
-    ```python
-    from utils.arm_controller.pi_gpio_controller import ArduinoTestController
-    arm_controller = ArduinoTestController(port="COM3")  # 請改為你的 Arduino 埠
-    ```
-- 未來要用樹莓派時，將 Arduino 相關程式碼註解掉即可。
-
-### 4. Arduino 測試程式
-
-請將下列程式燒錄到 Arduino，收到 A~F 指令時會閃爍 LED：
-
-```cpp
-const int ledPin = 13;
-void setup() {
-  Serial.begin(9600);
-  pinMode(ledPin, OUTPUT);
-}
-void loop() {
-  if (Serial.available()) {
-    char cmd = Serial.read();
-    if (cmd == 'A') { digitalWrite(ledPin, HIGH); delay(200); digitalWrite(ledPin, LOW);}
-    if (cmd == 'B') { for (int i=0; i<2; i++) { digitalWrite(ledPin, HIGH); delay(100); digitalWrite(ledPin, LOW); delay(100);}}
-    if (cmd == 'C') { for (int i=0; i<3; i++) { digitalWrite(ledPin, HIGH); delay(50); digitalWrite(ledPin, LOW); delay(50);}}
-    if (cmd == 'D') { digitalWrite(ledPin, HIGH); delay(500); digitalWrite(ledPin, LOW);}
-    if (cmd == 'E') { digitalWrite(ledPin, HIGH); delay(100); digitalWrite(ledPin, LOW); delay(100); digitalWrite(ledPin, HIGH); delay(100); digitalWrite(ledPin, LOW);}
-    if (cmd == 'F') { /* 你可以自訂F的動作 */ }
-  }
-}
-```
 
 ---
 
