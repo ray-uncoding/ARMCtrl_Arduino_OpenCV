@@ -1,109 +1,119 @@
+# ARMCtrl_OpenCV
 
-# ARMCtrl_Arduino_OpenCV
-
-本專案為一套整合影像辨識與 Arduino 控制的機器手臂控制系統，
-可針對紅色與藍色的「三角形」與「方形」目標物進行辨識，並傳送指令給機器手臂執行動作。
+本專案為一套基於 OpenCV 的機械手臂視覺控制系統，支援 HSV 顏色遮罩調整、形狀辨識、中文 UI 顯示、鏡頭切換，以及可切換 Arduino/樹莓派控制器，方便於不同硬體平台測試與部署。
 
 ---
 
-## 📦 安裝必要模組
+## 主要功能
 
-請先安裝以下必要模組（建議使用 Python 3.8+）
+- **即時攝影機影像顯示與辨識**
+- **HSV 遮罩調整 UI**（滑鼠拖曳調整 H/S/V 範圍）
+- **遮罩單色顯示**（只顯示目前調整的顏色遮罩）
+- **形狀辨識與中文標註**（紅色/藍色/綠色，方形/三角形，信心度）
+- **UI 按鈕操作**（調整顏色、儲存設定、自動模式、鏡頭切換、離開）
+- **滑鼠 hover 按鈕高亮效果**
+- **鏡頭即時切換**
+- **自動模式/無頭模式**
+- **支援 Arduino/樹莓派控制機械手臂**（可切換控制器）
+- **中文顯示（需字型檔 chinese.ttf）**
 
+---
+
+## 安裝需求
+
+- Python 3.8+
+- OpenCV (`opencv-python`)
+- Pillow (`pillow`)
+- numpy
+- pyserial（如需 Arduino 控制）
+- 需有中文字型檔（如 `chinese.ttf`，放在專案根目錄）
+
+安裝所有需求：
 ```bash
-pip install opencv-python pyserial numpy
+pip install -r requirements.txt
 ```
 
 ---
 
-## 🔧 系統架構
+## 使用方式
 
-- **OpenCV 模組**：負責即時攝影機影像擷取、HSV 遮罩與輪廓辨識。
-- **色彩域值調整工具 (`BRG_Bar.py`)**：可視化設定 HSV 門檻並儲存至 `color_config.json`。
-- **主控程式 (`main.py`)**：執行辨識流程、穩定狀態判定、傳送控制訊號。
-- **訊號傳送 (`signal_sender.py`)**：將辨識結果透過 Serial 傳送至 Arduino。
-- **介面顯示 (`ui_basic.py`)**：顯示原始畫面、遮罩與標註結果。
-
----
-
-## 🎯 目標物偵測邏輯
-
-1. 從攝影機畫面中擷取影像
-2. 轉換至 HSV 色彩空間
-3. 根據 `color_config.json` 中定義的 HSV 門檻產生遮罩
-4. 偵測輪廓並簡化多邊形
-5. 判斷形狀（三角形、正方形）
-6. 根據顏色與形狀比對 `action_map` 對應動作
-7. 傳送對應代碼給 Arduino
-
----
-
-## 🎮 使用方法
-
-### 1. 執行 `BRG_Bar.py` 進行 HSV 校正
+### 1. 啟動主程式
 
 ```bash
-python BRG_Bar.py
+python main_local.py
 ```
 
-操作方式：
+### 2. UI 操作
 
-- 使用滑桿調整 HSV 直到遮罩畫面正確標出目標物
-- **按下 `r` 鍵：切換為「紅色」模式**
-- **按下 `b` 鍵：切換為「藍色」模式**
-- **按下 `s` 鍵：儲存目前 HSV 範圍至對應顏色的 JSON 檔案中（將覆蓋該顏色舊資料）**
-- 可重複調整與存檔，每個顏色皆會獨立儲存其上下限區間
+- 透過右側按鈕調整紅/藍/綠色 HSV 範圍
+- 可即時切換鏡頭
+- 可儲存 HSV 設定
+- 可進入自動模式（無 UI 持續辨識）
 
-⚠️ **注意：請務必先按 `r` 或 `b` 選擇目標顏色後再儲存，否則會覆蓋錯誤顏色資料！**
+### 3. 控制器切換
 
-### 2. 執行 `main.py` 啟動主系統
+- **預設為樹莓派控制（PiGPIOController）**
+- 若要用 Arduino 測試，請在 `utils/arm_controller/pi_gpio_controller.py` 最下方啟用 `ArduinoTestController`，並於主程式初始化時使用：
+    ```python
+    from utils.arm_controller.pi_gpio_controller import ArduinoTestController
+    arm_controller = ArduinoTestController(port="COM3")  # 請改為你的 Arduino 埠
+    ```
+- 未來要用樹莓派時，將 Arduino 相關程式碼註解掉即可。
 
-```bash
-python main.py
-```
+### 4. Arduino 測試程式
 
-功能說明：
+請將下列程式燒錄到 Arduino，收到 A~F 指令時會閃爍 LED：
 
-- 系統持續進行影像分析與物件辨識
-- 當辨識結果穩定達成條件（如紅色+正方形）時：
-  - 會在畫面上顯示「Detected: `['A']`」這類代碼
-  - 並透過 Serial 傳送對應訊號至 Arduino 進行後續控制
-
----
-
-## 📁 檔案結構簡述
-
-```bash
-ARMCtrl_Arduino_OpenCV/
-├── Arduino2ARM/
-│   └── arduino_python.ino     # Arduino 控制端程式碼
-├── OpenCV2Arduino/
-│   ├── __init__.py
-│   ├── color_config.json      # HSV 範圍設定檔，供辨識與調整共用
-│   ├── config.py              # HSV 設定載入模組
-│   ├── detector.py            # 辨識模組（顏色形狀、輪廓與信心值）
-│   ├── confidence_scorer.py   # 計算輪廓信心分數
-│   ├── feature_validator.py   # 過濾不合理輪廓
-│   ├── signal_sender.py       # 傳送對應代碼至 Arduino
-│   ├── state_manager.py       # 多幀穩定性判斷模組
-│   ├── test_sender.py         # 測試用訊號模組（可選）
-│   └── ui_basic.py            # 顯示主畫面與辨識標記
-├── BRG_Bar.py                 # HSV 色彩調整工具（含即時滑桿與儲存功能）
-├── main.py                    # 啟動辨識流程的主程式
-└── README.md
-
+```cpp
+const int ledPin = 13;
+void setup() {
+  Serial.begin(9600);
+  pinMode(ledPin, OUTPUT);
+}
+void loop() {
+  if (Serial.available()) {
+    char cmd = Serial.read();
+    if (cmd == 'A') { digitalWrite(ledPin, HIGH); delay(200); digitalWrite(ledPin, LOW);}
+    if (cmd == 'B') { for (int i=0; i<2; i++) { digitalWrite(ledPin, HIGH); delay(100); digitalWrite(ledPin, LOW); delay(100);}}
+    if (cmd == 'C') { for (int i=0; i<3; i++) { digitalWrite(ledPin, HIGH); delay(50); digitalWrite(ledPin, LOW); delay(50);}}
+    if (cmd == 'D') { digitalWrite(ledPin, HIGH); delay(500); digitalWrite(ledPin, LOW);}
+    if (cmd == 'E') { digitalWrite(ledPin, HIGH); delay(100); digitalWrite(ledPin, LOW); delay(100); digitalWrite(ledPin, HIGH); delay(100); digitalWrite(ledPin, LOW);}
+    if (cmd == 'F') { /* 你可以自訂F的動作 */ }
+  }
+}
 ```
 
 ---
 
-## 🧠 特殊功能
+## 注意事項
 
-- 每種顏色與形狀的組合可對應自訂代碼（如 `Red+Square -> 'A'`）
-- 加入信心門檻與多幀穩定性判定，避免誤判或閃爍
-- 使用 JSON 儲存多組色彩設定，具擴充性
+- 若出現中文亂碼，請確認 `chinese.ttf` 字型檔存在於專案目錄。
+- 若要切換控制器，請依照註解啟用/註解對應區塊。
+- 若要新增顏色或形狀，請修改 `utils/vision_processing/detector.py` 及 `color_config.json`。
 
 ---
 
-## 👨‍💻 作者
+## 專案結構簡介
 
-本專案由 [ray-uncoding](https://github.com/ray-uncoding) 製作，並整合實體機器手臂進行展演。
+```
+ARMCtrl_OpenCV/
+├─ main_local.py                # 主程式
+├─ requirements.txt
+├─ chinese.ttf                  # 中文字型檔
+├─ utils/
+│  ├─ app_core.py
+│  ├─ arm_controller/
+│  │  ├─ pi_gpio_controller.py  # 樹莓派/Arduino 控制器
+│  ├─ vision_processing/
+│     ├─ detector.py
+│     ├─ ui_basic.py            # draw_chinese_text 等 UI 工具
+│     ├─ color_config.json
+│     └─ ...
+└─ ...
+```
+
+---
+
+## 聯絡/貢獻
+
+如有問題或建議，歡迎開 issue 或 PR！
