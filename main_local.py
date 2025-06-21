@@ -16,14 +16,18 @@ from utils.app_core import (
     StateManager 
 )
 from utils.vision_processing import config as vision_config
+from utils.vision_processing.ui_basic import draw_chinese_text
 
 # --- 全域變數 ---
+CANVAS_H = 900
+CANVAS_W = 1280
 current_color_to_adjust = "Red"
 current_action_from_buttons = None
 live_color_ranges = {}
 hsv_values = [[0,0,0],[179,255,255]]
 dragging = None  # (idx, min_or_max) or None
 ui_enabled = True  # 預設開啟UI
+hovered_button_idx = None  # 新增：目前 hover 的按鈕編號
 
 # --- UI 參數 ---
 BUTTON_HEIGHT = 30
@@ -32,12 +36,13 @@ TEXT_COLOR = (255, 255, 255)
 BUTTON_COLOR = (100, 100, 100)
 QUIT_BUTTON_COLOR = (50, 50, 150)
 buttons_config = [
-    {"rect": (20, 50, BUTTON_WIDTH, BUTTON_HEIGHT), "text": "調整紅色", "action": "set_red", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
-    {"rect": (20, 100, BUTTON_WIDTH, BUTTON_HEIGHT), "text": "調整藍色", "action": "set_blue", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
-    {"rect": (20, 150, BUTTON_WIDTH, BUTTON_HEIGHT), "text": "調整綠色", "action": "set_green", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
-    {"rect": (20, 200, BUTTON_WIDTH, BUTTON_HEIGHT), "text": "儲存設定", "action": "save", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
-    {"rect": (20, 250, BUTTON_WIDTH, BUTTON_HEIGHT), "text": "自動模式", "action": "auto_mode", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
-    {"rect": (20, 300, BUTTON_WIDTH, BUTTON_HEIGHT), "text": "離開", "action": "quit", "color": QUIT_BUTTON_COLOR, "text_color": TEXT_COLOR},
+    {"text": "調整紅色", "action": "set_red", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
+    {"text": "調整藍色", "action": "set_blue", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
+    {"text": "調整綠色", "action": "set_green", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
+    {"text": "儲存設定", "action": "save", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
+    {"text": "自動模式", "action": "auto_mode", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
+    {"text": "選擇鏡頭", "action": "select_camera", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},  # 放在這裡
+    {"text": "離開", "action": "quit", "color": QUIT_BUTTON_COLOR, "text_color": TEXT_COLOR},         # 最後一個
 ]
 # HSV條參數
 HSV_BAR_X = 970
@@ -57,6 +62,7 @@ def draw_hsv_panel(hsv_values, current_color):
     return panel
 
 def draw_buttons_panel_img(current_color):
+    global hovered_button_idx
     # 英文顏色對應中文
     color_map = {"Red": "紅色", "Blue": "藍色", "Green": "綠色"}
     btn_count = len(buttons_config)
@@ -88,6 +94,10 @@ def draw_buttons_panel_img(current_color):
     for idx, button in enumerate(buttons_config):
         y = btn_y + idx * (btn_h + btn_gap)
         color = button["color"]
+        # hover 時變色
+        if hovered_button_idx == idx:
+            # 這裡用簡單的對比色（可自行調整）
+            color = (min(color[0]+80,255), min(color[1]+80,255), min(color[2]+80,255))
         cv2.rectangle(panel, (btn_x, y), (btn_x + btn_w, y + btn_h), color, -1)
         # 置中計算
         font_size_btn = 22
@@ -106,15 +116,10 @@ def draw_buttons_panel_img(current_color):
         )
     return panel
 
-def draw_chinese_text(img, text, pos, font_size=32, color=(0,0,0), font_path="chinese.ttf"):
-    img_pil = Image.fromarray(img)
-    draw = ImageDraw.Draw(img_pil)
-    font = ImageFont.truetype(font_path, font_size)
-    draw.text(pos, text, font=font, fill=(color[2], color[1], color[0]))
-    return np.array(img_pil)
+
 
 def draw_combined_ui(main_img, hsv_values, current_color, mask=None):
-    canvas_h, canvas_w = 720, 1280
+    canvas_h, canvas_w = CANVAS_H, CANVAS_W
     canvas = np.full((canvas_h, canvas_w, 3), 255, dtype=np.uint8)  # 背景白色
 
     # 相對位置與大小
@@ -134,7 +139,7 @@ def draw_combined_ui(main_img, hsv_values, current_color, mask=None):
     hsv_panel_h = int(canvas_h * 0.25)
 
     ctrl_panel_x = hsv_panel_x
-    ctrl_panel_y = int(canvas_h * 0.48)
+    ctrl_panel_y = int(canvas_h * 0.40)  # 原本是 0.48，往上移一點
 
     # 左上主畫面
     main_img_resized = cv2.resize(main_img, (main_w, main_h))
@@ -185,6 +190,7 @@ def draw_combined_ui(main_img, hsv_values, current_color, mask=None):
     return canvas
 
 def draw_buttons_panel_img(current_color, panel_w=320, panel_h=None):
+    global hovered_button_idx
     # 英文顏色對應中文
     color_map = {"Red": "紅色", "Blue": "藍色", "Green": "綠色"}
     btn_count = len(buttons_config)
@@ -216,6 +222,10 @@ def draw_buttons_panel_img(current_color, panel_w=320, panel_h=None):
     for idx, button in enumerate(buttons_config):
         y = btn_y + idx * (btn_h + btn_gap)
         color = button["color"]
+        # hover 時變色
+        if hovered_button_idx == idx:
+            # 這裡用簡單的對比色（可自行調整）
+            color = (min(color[0]+80,255), min(color[1]+80,255), min(color[2]+80,255))
         cv2.rectangle(panel, (btn_x, y), (btn_x + btn_w, y + btn_h), color, -1)
         # 置中計算
         font_size_btn = 22
@@ -235,14 +245,11 @@ def draw_buttons_panel_img(current_color, panel_w=320, panel_h=None):
     return panel
 
 def on_all_in_one_mouse(event, x, y, flags, param):
-    global current_action_from_buttons, dragging, hsv_values
-    # 與 draw_combined_ui 完全一致的相對座標
-    canvas_h, canvas_w = 720, 1280
-
-    # 右下按鈕互動區
+    global current_action_from_buttons, dragging, hsv_values, hovered_button_idx
+    canvas_h, canvas_w = CANVAS_H, CANVAS_W
     hsv_panel_w = int(canvas_w * 0.22)
     ctrl_panel_x = int(canvas_w * 0.75)
-    ctrl_panel_y = int(canvas_h * 0.48)  # 這裡也要同步
+    ctrl_panel_y = int(canvas_h * 0.40)  # 必須和 draw_combined_ui 一致
     panel_w = hsv_panel_w
     # 與 draw_buttons_panel_img 保持一致
     btn_count = len(buttons_config)
@@ -254,6 +261,7 @@ def on_all_in_one_mouse(event, x, y, flags, param):
     btn_w = int(panel_w * 0.75)
     btn_x = int((panel_w - btn_w) / 2)
     btn_y = top_margin
+    hovered = None
     for idx, button in enumerate(buttons_config):
         y_btn = btn_y + idx * (btn_h + btn_gap)
         abs_x1 = ctrl_panel_x + btn_x
@@ -264,6 +272,12 @@ def on_all_in_one_mouse(event, x, y, flags, param):
             if abs_x1 <= x < abs_x2 and abs_y1 <= y < abs_y2:
                 current_action_from_buttons = button["action"]
                 return
+        if event == cv2.EVENT_MOUSEMOVE:
+            if abs_x1 <= x < abs_x2 and abs_y1 <= y < abs_y2:
+                hovered = idx
+    if event == cv2.EVENT_MOUSEMOVE:
+        if hovered_button_idx != hovered:
+            hovered_button_idx = hovered
 
     # HSV滑動條互動區（完全用相對座標）
     hsv_panel_x = int(canvas_w * 0.75)
@@ -299,9 +313,9 @@ def on_all_in_one_mouse(event, x, y, flags, param):
                 hsv_values[1][idx] = max(value, hsv_values[0][idx]+1)
 
 def show_auto_mode_confirm(live_color_ranges):
-    panel_w, panel_h = 500, 320
+    panel_w, panel_h = 500, 360
     panel = np.full((panel_h, panel_w, 3), 240, dtype=np.uint8)
-    panel = draw_chinese_text(panel, "請確認以下各顏色之HSV資訊。", (20, 35), font_size=32, color=(0,0,0))
+    panel = draw_chinese_text(panel, "請確認以下各顏色之HSV資訊。", (20, 25), font_size=32, color=(0,0,0))
     y = 70
     for color, hsv in live_color_ranges.items():
         ch_color = color
@@ -317,17 +331,118 @@ def show_auto_mode_confirm(live_color_ranges):
             (20, y), font_size=24, color=(0,0,0)
         )
         y += 35
-    panel = draw_chinese_text(panel, "按 Y 確認，N 取消", (20, panel_h-60), font_size=28, color=(0,0,0))
-    panel = draw_chinese_text(panel, "確認後 UI畫面即消失!", (20, panel_h-30), font_size=24, color=(255,0,0))
+    btns = [
+        {"text": "確認", "color": BUTTON_COLOR, "result": True},
+        {"text": "取消", "color": BUTTON_COLOR, "result": False},
+    ]
+    btn_rects = []
+    for i, btn in enumerate(btns):
+        bx, by, bw, bh = 60 + i*200, panel_h-110, 140, 45
+        btn_rects.append((bx, by, bx+bw, by+bh, btn["result"]))
+    # 新增紅色提示文字
+    panel = draw_chinese_text(panel, "      按下確認後即進入持續辨識的無UI模式!", (20, panel_h-175), font_size=20, color=(255,0,0))
+    panel = draw_chinese_text(panel, "      若要關閉則在CMD中按ctrl+c打斷程式", (20, panel_h-150), font_size=20, color=(255,0,0))
+
+    hovered_idx = [None]  # 用list包裝以便內部修改
+
+    def redraw_panel():
+        temp_panel = panel.copy()
+        for i, btn in enumerate(btns):
+            bx, by, bw, bh = 60 + i*200, panel_h-110, 140, 45
+            color = btn["color"]
+            if hovered_idx[0] == i:
+                color = (min(color[0]+80,255), min(color[1]+80,255), min(color[2]+80,255))
+            cv2.rectangle(temp_panel, (bx, by), (bx+bw, by+bh), color, -1)
+            temp_panel = draw_chinese_text(temp_panel, btn["text"], (bx+20, by+8), font_size=28, color=TEXT_COLOR)
+        cv2.imshow("Auto Mode confirm", temp_panel)
+
+    selected = {'result': None}
+    def on_mouse(event, x, y, flags, param):
+        hover = None
+        for i, (bx1, by1, bx2, by2, _) in enumerate(btn_rects):
+            if bx1 <= x <= bx2 and by1 <= y <= by2:
+                hover = i
+                if event == cv2.EVENT_LBUTTONDOWN:
+                    selected['result'] = btns[i]["result"]
+        if hovered_idx[0] != hover:
+            hovered_idx[0] = hover
+            redraw_panel()
+
     cv2.imshow("Auto Mode confirm", panel)
+    cv2.setMouseCallback("Auto Mode confirm", on_mouse)
+    redraw_panel()
     while True:
-        key = cv2.waitKey(0)
-        if key in [ord('y'), ord('Y')]:
+        if selected['result'] is not None:
             cv2.destroyWindow("Auto Mode confirm")
-            return True
-        elif key in [ord('n'), ord('N'), 27]:  # 27=ESC
+            return selected['result']
+        evt = cv2.waitKey(10)
+        if evt == 27:
             cv2.destroyWindow("Auto Mode confirm")
             return False
+
+def select_camera_dialog():
+    available = []
+    for idx in range(5):
+        cap = cv2.VideoCapture(idx)
+        if cap.isOpened():
+            available.append(idx)
+            cap.release()
+    if not available:
+        print("未偵測到任何鏡頭")
+        return None
+    panel_w, panel_h = 400, 80 + 60 * len(available) + 60
+    btn_rects = []
+    for i, idx in enumerate(available):
+        y = 80 + i*50
+        btn_x, btn_y, btn_w, btn_h = 40, y, 300, 40
+        btn_rects.append((btn_x, btn_y, btn_x+btn_w, btn_y+btn_h, idx))
+    # 返回按鈕
+    back_btn_y = 80 + len(available)*50 + 10
+    back_btn_x, back_btn_w, back_btn_h = 40, 300, 40
+    btn_rects.append((back_btn_x, back_btn_y, back_btn_x+back_btn_w, back_btn_y+back_btn_h, "back"))
+
+    hovered_idx = [None]
+
+    def redraw_panel():
+        panel = np.full((panel_h, panel_w, 3), 240, dtype=np.uint8)
+        panel = draw_chinese_text(panel, "請選擇鏡頭：", (20, 30), font_size=32, color=(0,0,0))
+        for i, rect in enumerate(btn_rects):
+            bx1, by1, bx2, by2, cam_idx = rect
+            color = BUTTON_COLOR
+            if i == hovered_idx[0]:
+                color = (min(color[0]+80,255), min(color[1]+80,255), min(color[2]+80,255))
+            cv2.rectangle(panel, (bx1, by1), (bx2, by2), color, -1)
+            if cam_idx == "back":
+                text = "返回"
+            else:
+                text = f"{i+1}. 鏡頭 {cam_idx}"
+            panel = draw_chinese_text(panel, text, (bx1+15, by1+5), font_size=28, color=TEXT_COLOR)
+        cv2.imshow("Select Camera", panel)
+
+    selected = {'idx': None}
+    def on_mouse(event, x, y, flags, param):
+        hover = None
+        for i, (bx1, by1, bx2, by2, cam_idx) in enumerate(btn_rects):
+            if bx1 <= x <= bx2 and by1 <= y <= by2:
+                hover = i
+                if event == cv2.EVENT_LBUTTONDOWN:
+                    selected['idx'] = cam_idx
+        if hovered_idx[0] != hover:
+            hovered_idx[0] = hover
+            redraw_panel()
+
+    redraw_panel()
+    cv2.setMouseCallback("Select Camera", on_mouse)
+    while True:
+        if selected['idx'] is not None:
+            cv2.destroyWindow("Select Camera")
+            if selected['idx'] == "back":
+                return None
+            return selected['idx']
+        evt = cv2.waitKey(10)
+        if evt == 27 or evt == ord('q'):
+            cv2.destroyWindow("Select Camera")
+            return None
 
 def main():
     global current_color_to_adjust, current_action_from_buttons, live_color_ranges, hsv_values, ui_enabled
@@ -356,12 +471,18 @@ def main():
                 break
             # 更新 live_color_ranges
             live_color_ranges[current_color_to_adjust] = deepcopy(hsv_values)
-            result_frame, labels, mask = process_frame_and_control_arm(
+            result_frame, labels, masks = process_frame_and_control_arm(
                 frame, state_manager, arm_controller, live_color_ranges,
                 show_debug_windows=args.show_debug_masks
             )
             if ui_enabled:
-                combined = draw_combined_ui(result_frame, hsv_values, current_color_to_adjust, mask)
+                # 只顯示目前調整顏色的遮罩
+                current_mask = None
+                if isinstance(masks, dict):
+                    current_mask = masks.get(current_color_to_adjust)
+                else:
+                    current_mask = masks  # 若原本就是單一mask
+                combined = draw_combined_ui(result_frame, hsv_values, current_color_to_adjust, current_mask)
                 cv2.imshow("ARMCtrl-ALL-IN-ONE", combined)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
@@ -393,6 +514,22 @@ def main():
                     print("[MainLocal] Entering headless (auto) mode, UI closed.")
                 else:
                     print("[MainLocal] 取消進入自動模式。")
+                current_action_from_buttons = None
+            # 新增鏡頭選擇功能
+            elif current_action_from_buttons == "select_camera":
+                cam_idx = select_camera_dialog()
+                if cam_idx is not None:
+                    cv2.destroyWindow("ARMCtrl-ALL-IN-ONE")
+                    cleanup_resources(cap, arm_controller)
+                    cap, frame_width, frame_height, fps = initialize_camera(cam_idx)
+                    print(f"[MainLocal] 成功切換到攝影機 {cam_idx}.")
+                    arm_controller = initialize_arm_controller(args)
+                    state_manager = StateManager()
+                    live_color_ranges = deepcopy(vision_config.color_ranges)
+                    hsv_values = deepcopy(initial_hsv_for_trackbar)
+                    cv2.namedWindow("ARMCtrl-ALL-IN-ONE")
+                    cv2.setMouseCallback("ARMCtrl-ALL-IN-ONE", on_all_in_one_mouse)
+                    print("[MainLocal] 請重新設定 HSV 範圍.")
                 current_action_from_buttons = None
             if not ui_enabled:
                 # 無頭模式下可加自動退出條件或其他自動流程

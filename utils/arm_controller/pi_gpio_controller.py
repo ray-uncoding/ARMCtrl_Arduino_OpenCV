@@ -166,6 +166,12 @@ class PiGPIOController:
     def trigger_action_D(self): # Corresponds to Arduino 'D' -> 0100
         self._execute_arm_sequence_with_protocol(True, False, False, "Action D (Encoded: 100)")
 
+    def trigger_action_E(self): # Corresponds to Arduino 'E' -> 0101
+        self._execute_arm_sequence_with_protocol(True, False, True, "Action E (Encoded: 101)")
+        
+    def trigger_action_F(self): # Corresponds to Arduino 'F' -> 0110
+        self._execute_arm_sequence_with_protocol(True, True, False, "Action F (Encoded: 110)")
+        
     def run_test_led_sequence(self):
         if not self.rpi_gpio_available or not self.led_pin:
             print("[PiGPIOController] Test LED sequence skipped (GPIO not available or LED pin not set).")

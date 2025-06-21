@@ -1,6 +1,8 @@
 # utils/vision_processing/ui_basic.py
 
 import cv2
+import numpy as np
+from PIL import ImageFont, ImageDraw, Image
 
 class AppUI:
     def __init__(self, window_name="ARMCtrl Demo"):
@@ -33,3 +35,10 @@ class AppUI:
         if cv2.getWindowProperty(self.window_name, cv2.WND_PROP_VISIBLE) >= 1:
             cv2.destroyWindow(self.window_name)
             print(f"[AppUI] Window '{self.window_name}' destroyed.")
+
+def draw_chinese_text(img, text, pos, font_size=32, color=(0,0,0), font_path="chinese.ttf"):
+    img_pil = Image.fromarray(img)
+    draw = ImageDraw.Draw(img_pil)
+    font = ImageFont.truetype(font_path, font_size)
+    draw.text(pos, text, font=font, fill=(color[2], color[1], color[0]))
+    return np.array(img_pil)
