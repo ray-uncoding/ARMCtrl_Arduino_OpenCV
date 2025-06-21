@@ -21,7 +21,7 @@
 
 ## 安裝需求
 
-- Python 3.8+
+-Python:3.9.0~3.11.9
 - OpenCV (`opencv-python`)
 - Pillow (`pillow`)
 - numpy
@@ -37,13 +37,15 @@ pip install -r requirements.txt
 
 ## 使用方式
 
-### 1. 啟動主程式
+### 1.請先確認工作目錄是在"ARMCtrl_OpenCV"底下。
+
+### 2. 啟動主程式
 
 ```bash
 python main_local.py
 ```
 
-### 2. UI 操作
+### 3. UI 操作
 
 - 透過右側按鈕調整紅/藍/綠色 HSV 範圍
 - 可即時切換鏡頭
