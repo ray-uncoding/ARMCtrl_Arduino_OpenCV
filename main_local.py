@@ -33,16 +33,17 @@ hovered_button_idx = None  # 新增：目前 hover 的按鈕編號
 BUTTON_HEIGHT = 30
 BUTTON_WIDTH = 180
 TEXT_COLOR = (255, 255, 255)
-BUTTON_COLOR = (100, 100, 100)
-QUIT_BUTTON_COLOR = (50, 50, 150)
+BUTTON_COLOR = (100, 100, 100) # 灰色按鈕
+AUTO_BOTTON_COLOR = (0, 150, 0)  # 綠色按鈕
+QUIT_BUTTON_COLOR = (50, 50, 150) # 紅色案紐
 buttons_config = [
     {"text": "調整紅色", "action": "set_red", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
     {"text": "調整藍色", "action": "set_blue", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
     {"text": "調整綠色", "action": "set_green", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
     {"text": "儲存設定", "action": "save", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
-    {"text": "自動模式", "action": "auto_mode", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},
-    {"text": "選擇鏡頭", "action": "select_camera", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},  # 放在這裡
-    {"text": "離開", "action": "quit", "color": QUIT_BUTTON_COLOR, "text_color": TEXT_COLOR},         # 最後一個
+    {"text": "自動模式", "action": "auto_mode", "color": AUTO_BOTTON_COLOR, "text_color": TEXT_COLOR},
+    {"text": "選擇鏡頭", "action": "select_camera", "color": BUTTON_COLOR, "text_color": TEXT_COLOR},  
+    {"text": "離開", "action": "quit", "color": QUIT_BUTTON_COLOR, "text_color": TEXT_COLOR},
 ]
 # HSV條參數
 HSV_BAR_X = 970
