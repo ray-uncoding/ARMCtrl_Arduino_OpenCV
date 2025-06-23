@@ -52,6 +52,66 @@ python main_local.py
 - 可儲存 HSV 設定
 - 可進入自動模式（無 UI 持續辨識）
 
+---
+
+## 硬體整合與接線
+
+本專案可透過樹莓派的 GPIO 控制四路繼電器模組，以觸發外部裝置（如 Arduino 或其他微控制器）執行對應動作。
+
+### 繼電器控制協議
+
+系統採用**編碼觸發協議**，使用 1 個繼電器作為觸發信號，另外 3 個作為數據信號。
+
+- **R1 (繼電器1):** 作為**觸發信號 (Trigger Signal)**。當 R1 由 OFF 轉 ON 時，代表一次有效指令的開始。
+- **R2, R3, R4 (繼電器2-4):** 作為**數據信號 (Data Signals)**。它們的 ON/OFF 組合構成 3-bit 二進位碼，代表不同動作。
+
+#### 標籤與繼電器狀態對應表
+
+| 影像辨識標籤 | 觸發函式 | R2 (Data) | R3 (Data) | R4 (Data) | 3-bit 編碼 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **'A'** | `trigger_action_A()` | `OFF` | `OFF` | `ON` | **001** |
+| **'B'** | `trigger_action_B()` | `OFF` | `ON` | `OFF` | **010** |
+| **'C'** | `trigger_action_C()` | `OFF` | `ON` | `ON` | **011** |
+| **'D'** | `trigger_action_D()` | `ON` | `OFF` | `OFF` | **100** |
+| **'E'** | `trigger_action_E()` | `ON` | `OFF` | `ON` | **101** |
+| **'F'** | `trigger_action_F()` | `ON` | `ON` | `OFF` | **110** |
+
+### 硬體接線建議
+
+以下接線圖以 `pi_gpio_controller.py` 中用於測試的預設腳位為例。
+
+- **Relay 1 (Trigger):** GPIO 17
+- **Relay 2 (Data):** GPIO 27
+- **Relay 3 (Data):** GPIO 22
+- **Relay 4 (Data):** GPIO 23
+
+```text
+      Raspberry Pi 4B
++--------------------------+                          +------------------------+
+|      (GPIO Header)       |                          |  4-Channel Relay Module|
+|                          |                          |                        |
+| 3.3V [ ]      [ ] 5V     |--------------------------o VCC                    |
+|      [ ]      [ ] 5V     |                          |                        |
+|      [ ]      [ ] GND    |--------------------------o GND                    |
+|      [ ]      [ ] GPIO14 |                          |                        |
+| GND  [ ]      [ ] GPIO15 |                          |                        |
+|      [ ]      [ ] GPIO18 |                          |                        |
+|GPIO17[ ]o-----[ ]        |                          o IN1 (To Arduino/Device)|
+|      [ ]      [ ] GND    |                          |                        |
+|GPIO27[ ]o-----[ ]        |                          o IN2 (To Arduino/Device)|
+|GPIO22[ ]o-----[ ]        |                          o IN3 (To Arduino/Device)|
+| 3.3V [ ]      [ ] GPIO23 o--------------------------o IN4 (To Arduino/Device)|
+|      [ ]      [ ] GPIO24 |                          |                        |
+|      ...                 |                          +------------------------+
++--------------------------+
+```
+
+**接線說明:**
+1.  **繼電器供電:** 將繼電器模組的 `VCC` 接至樹莓派的 `5V`，`GND` 接至 `GND`。
+2.  **信號線:** 將樹莓派的 GPIO 腳位 (17, 27, 22, 23) 分別連接到繼電器模組的 `IN1`, `IN2`, `IN3`, `IN4`。
+3.  **繼電器輸出:** 繼電器模組的輸出端 (COM, NO, NC) 則連接到下游設備的對應輸入腳位。
+4.  **腳位修改:** 您可以在程式中呼叫 `initialize_arm_controller` 時，傳入自訂的 GPIO 腳位列表。
+5.  **邏輯電位:** 程式預設使用**低電位觸發** (`inverse_logic=True`) 的繼電器模組。如果您的模組為高電位觸發，請修改此參數。
 
 
 ---
