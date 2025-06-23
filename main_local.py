@@ -1,9 +1,7 @@
-#記錄點
-
-# main_local.py
 import cv2
 import argparse
 import numpy as np
+import time
 from copy import deepcopy
 from PIL import ImageFont, ImageDraw, Image
 
@@ -28,6 +26,7 @@ hsv_values = [[0,0,0],[179,255,255]]
 dragging = None  # (idx, min_or_max) or None
 ui_enabled = True  # 預設開啟UI
 hovered_button_idx = None  # 新增：目前 hover 的按鈕編號
+save_feedback_end_time = 0 # 新增：用來控制儲存成功訊息的顯示時間
 
 # --- UI 參數 ---
 BUTTON_HEIGHT = 30
@@ -62,8 +61,8 @@ def draw_hsv_panel(hsv_values, current_color):
         cv2.putText(panel, f"{l}_max: {hsv_values[1][i]:3d}", (160, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 1)
     return panel
 
-def draw_buttons_panel_img(current_color):
-    global hovered_button_idx
+def draw_buttons_panel_img(current_color, panel_w=320, panel_h=None):
+    global hovered_button_idx, save_feedback_end_time
     # 英文顏色對應中文
     color_map = {"Red": "紅色", "Blue": "藍色", "Green": "綠色"}
     btn_count = len(buttons_config)
@@ -71,12 +70,18 @@ def draw_buttons_panel_img(current_color):
     btn_gap = 15
     top_margin = 50
     bottom_margin = 20
-    panel_h = top_margin + btn_count * btn_h + (btn_count - 1) * btn_gap + bottom_margin
-    panel_w = 320
+    if panel_h is None:
+        panel_h = top_margin + btn_count * btn_h + (btn_count - 1) * btn_gap + bottom_margin
     panel = np.full((panel_h, panel_w, 3), (220, 220, 220), dtype=np.uint8)
-    # 中文顏色顯示
-    ch_color = color_map.get(current_color, current_color)
-    adjust_text = f"調整目標：{ch_color}"
+
+    # 檢查是否要顯示儲存成功訊息
+    if time.time() < save_feedback_end_time:
+        adjust_text = "儲存成功！"
+    else:
+        # 中文顏色顯示
+        ch_color = color_map.get(current_color, current_color)
+        adjust_text = f"調整目標：{ch_color}"
+
     # 置中計算
     font_size = 28
     font_path = "chinese.ttf"
@@ -116,8 +121,6 @@ def draw_buttons_panel_img(current_color):
             font_path=font_path
         )
     return panel
-
-
 
 def draw_combined_ui(main_img, hsv_values, current_color, mask=None):
     canvas_h, canvas_w = CANVAS_H, CANVAS_W
@@ -189,61 +192,6 @@ def draw_combined_ui(main_img, hsv_values, current_color, mask=None):
     canvas[y1:y2, x1:x2] = panel_crop
 
     return canvas
-
-def draw_buttons_panel_img(current_color, panel_w=320, panel_h=None):
-    global hovered_button_idx
-    # 英文顏色對應中文
-    color_map = {"Red": "紅色", "Blue": "藍色", "Green": "綠色"}
-    btn_count = len(buttons_config)
-    btn_h = 40
-    btn_gap = 15
-    top_margin = 50
-    bottom_margin = 20
-    if panel_h is None:
-        panel_h = top_margin + btn_count * btn_h + (btn_count - 1) * btn_gap + bottom_margin
-    panel = np.full((panel_h, panel_w, 3), (220, 220, 220), dtype=np.uint8)
-    # 中文顏色顯示
-    ch_color = color_map.get(current_color, current_color)
-    adjust_text = f"調整目標：{ch_color}"
-    # 置中計算
-    font_size = 28
-    font_path = "chinese.ttf"
-    # 先用 PIL 計算文字寬度
-    from PIL import ImageFont
-    font = ImageFont.truetype(font_path, font_size)
-    bbox = font.getbbox(adjust_text)
-    text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    text_x = (panel_w - text_w) // 2
-    text_y = 15
-    panel = draw_chinese_text(panel, adjust_text, (text_x, text_y), font_size=font_size, color=(0,0,0), font_path=font_path)
-
-    btn_w = int(panel_w * 0.75)
-    btn_x = int((panel_w - btn_w) / 2)
-    btn_y = top_margin
-    for idx, button in enumerate(buttons_config):
-        y = btn_y + idx * (btn_h + btn_gap)
-        color = button["color"]
-        # hover 時變色
-        if hovered_button_idx == idx:
-            # 這裡用簡單的對比色（可自行調整）
-            color = (min(color[0]+80,255), min(color[1]+80,255), min(color[2]+80,255))
-        cv2.rectangle(panel, (btn_x, y), (btn_x + btn_w, y + btn_h), color, -1)
-        # 置中計算
-        font_size_btn = 22
-        font_btn = ImageFont.truetype(font_path, font_size_btn)
-        bbox_btn = font_btn.getbbox(button["text"])
-        text_w_btn, text_h_btn = bbox_btn[2] - bbox_btn[0], bbox_btn[3] - bbox_btn[1]
-        text_x_btn = btn_x + (btn_w - text_w_btn) // 2
-        text_y_btn = y + (btn_h - text_h_btn) // 2
-        panel = draw_chinese_text(
-            panel,
-            button["text"],
-            (text_x_btn, text_y_btn),
-            font_size=font_size_btn,
-            color=button.get("text_color", (0,0,0)),
-            font_path=font_path
-        )
-    return panel
 
 def on_all_in_one_mouse(event, x, y, flags, param):
     global current_action_from_buttons, dragging, hsv_values, hovered_button_idx
@@ -446,7 +394,7 @@ def select_camera_dialog():
             return None
 
 def main():
-    global current_color_to_adjust, current_action_from_buttons, live_color_ranges, hsv_values, ui_enabled
+    global current_color_to_adjust, current_action_from_buttons, live_color_ranges, hsv_values, ui_enabled, save_feedback_end_time
     parser = argparse.ArgumentParser(description="ARMCtrl OpenCV Application - Local Display Mode with HSV Adjustment")
     parser = add_common_arguments(parser)
     parser.add_argument('--show_debug_masks', action=argparse.BooleanOptionalAction, default=False, help="Show individual color mask windows for debugging.")
@@ -488,10 +436,15 @@ def main():
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
                     break
+                # 檢查視窗是否被手動關閉 (按X)
+                if cv2.getWindowProperty("ARMCtrl-ALL-IN-ONE", cv2.WND_PROP_VISIBLE) < 1:
+                    print("[MainLocal] Window closed by user.")
+                    break
             # 按鈕動作
             if current_action_from_buttons == "save":
                 vision_config.save_color_ranges(live_color_ranges)
                 print("[MainLocal] Saved current HSV values for ALL colors to config.")
+                save_feedback_end_time = time.time() + 2 # 訊息顯示 2 秒
                 current_action_from_buttons = None
             elif current_action_from_buttons == "set_red":
                 current_color_to_adjust = "Red"
