@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 import time
 from copy import deepcopy
-from PIL import ImageFont, ImageDraw, Image
+from PIL import ImageFont
 
 from utils.app_core import (
     add_common_arguments, 
@@ -86,7 +86,6 @@ def draw_buttons_panel_img(current_color, panel_w=320, panel_h=None):
     font_size = 28
     font_path = "chinese.ttf"
     # 先用 PIL 計算文字寬度
-    from PIL import ImageFont
     font = ImageFont.truetype(font_path, font_size)
     bbox = font.getbbox(adjust_text)
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
