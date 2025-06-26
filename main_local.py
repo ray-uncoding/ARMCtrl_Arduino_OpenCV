@@ -324,6 +324,10 @@ def show_auto_mode_confirm(live_color_ranges):
             cv2.destroyWindow("Auto Mode confirm")
             return selected['result']
         evt = cv2.waitKey(10)
+        # 新增：檢查視窗是否被手動關閉
+        if cv2.getWindowProperty("Auto Mode confirm", cv2.WND_PROP_VISIBLE) < 1:
+            print("[MainLocal] Auto Mode confirm window closed by user.")
+            return False
         if evt == 27:
             cv2.destroyWindow("Auto Mode confirm")
             return False
@@ -388,6 +392,10 @@ def select_camera_dialog():
                 return None
             return selected['idx']
         evt = cv2.waitKey(10)
+        # 新增：檢查視窗是否被手動關閉
+        if cv2.getWindowProperty("Select Camera", cv2.WND_PROP_VISIBLE) < 1:
+            print("[MainLocal] Select Camera window closed by user.")
+            return None
         if evt == 27 or evt == ord('q'):
             cv2.destroyWindow("Select Camera")
             return None
