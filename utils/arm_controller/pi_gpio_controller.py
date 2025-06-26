@@ -11,7 +11,7 @@ except RuntimeError:
     RPI_GPIO_AVAILABLE = False
 
 class PiGPIOController:
-    def __init__(self, relay_pins, led_pin=None, inverse_logic=True, gpio_mode=None):
+    def __init__(self, relay_pins, led_pin=None, inverse_logic=True, gpio_mode=None, ready_pin=None):
         """
         Initialize the Raspberry Pi GPIO controller for arm relays.
         :param relay_pins: A list or tuple of 4 GPIO pin numbers (BCM mode) for relays 1-4.
@@ -23,6 +23,8 @@ class PiGPIOController:
         self.led_pin = led_pin
         self.inverse_logic = inverse_logic
         self.rpi_gpio_available = RPI_GPIO_AVAILABLE
+        self.ready_pin = ready_pin
+        self._ready_pin_state = 0  # 0=LOW, 1=HIGH
 
         if not self.rpi_gpio_available:
             print("[PiGPIOController] Operating in simulation mode. No actual GPIO changes will occur.")
@@ -44,6 +46,9 @@ class PiGPIOController:
         
         if self.led_pin:
             GPIO.setup(self.led_pin, GPIO.OUT)
+
+        if self.ready_pin is not None:
+            GPIO.setup(self.ready_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
         self.all_relays_off() # Initialize relays to off state
 
@@ -195,6 +200,18 @@ class PiGPIOController:
         GPIO.cleanup()
         print("[PiGPIOController] GPIO cleanup complete.")
 
+    def get_ready_pin(self):
+        """取得 ready_pin 狀態，模擬時回傳 self._ready_pin_state"""
+        if not self.rpi_gpio_available:
+            return self._ready_pin_state
+        if self.ready_pin is None:
+            return 0
+        return GPIO.input(self.ready_pin)
+
+    def set_ready_pin_sim(self, value):
+        """僅模擬用，設定 ready_pin 狀態"""
+        self._ready_pin_state = 1 if value else 0
+
 if __name__ == '__main__':
     # This is for basic testing of the PiGPIOController class itself.
     # You'll need to define your actual GPIO pins here and ensure RPi.GPIO is installed.
@@ -210,10 +227,11 @@ if __name__ == '__main__':
         controller = None
         try:
             controller = PiGPIOController(
-                relay_pins=RELAY_PINS_FOR_TEST,
-                led_pin=LED_PIN_FOR_TEST,
-                inverse_logic=INVERSE_RELAY_LOGIC,
-                gpio_mode=GPIO.BCM 
+                relay_pins=[17, 27, 22, 23],
+                led_pin=18,
+                inverse_logic=True,
+                gpio_mode=GPIO.BCM,
+                ready_pin=26      # <--- 這裡指定
             )
             
             print("Testing LED sequence...")

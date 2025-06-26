@@ -53,6 +53,12 @@ def add_common_arguments(parser):
         default=DEFAULT_INVERSE_LOGIC,
         help="Set if arm relays are inverse logic (LOW active)"
     )
+    parser.add_argument(
+        '--ready_pin',
+        type=int,
+        default=26,
+        help="GPIO pin for ready signal (default: 26)"
+    )
     return parser
 
 def initialize_camera(cap_source_str):
@@ -93,7 +99,8 @@ def initialize_arm_controller(args):
     arm_controller = PiGPIOController(
         relay_pins=args.relay_pins, 
         led_pin=args.led_pin, 
-        inverse_logic=args.arm_inverse_logic
+        inverse_logic=args.arm_inverse_logic,
+        ready_pin=getattr(args, "ready_pin", 26)  # 預設 26
     )
     print(f"[Core] Arm controller initialized with GPIO pins: Relays {args.relay_pins}, LED {args.led_pin}. Inverse Logic: {args.arm_inverse_logic}")
     return arm_controller

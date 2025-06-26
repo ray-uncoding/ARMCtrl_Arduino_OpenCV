@@ -413,23 +413,24 @@ def main():
     cv2.setMouseCallback("ARMCtrl-ALL-IN-ONE", on_all_in_one_mouse)
     print("[MainLocal] System running. Use UI buttons or press 'q' in the OpenCV window to quit.")
     try:
+        ready_sim_start_time = None
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
-            # 更新 live_color_ranges
-            live_color_ranges[current_color_to_adjust] = deepcopy(hsv_values)
-            result_frame, labels, masks = process_frame_and_control_arm(
-                frame, state_manager, arm_controller, live_color_ranges,
-                show_debug_windows=args.show_debug_masks
-            )
+
+            # 有 UI 模式：一直辨識
             if ui_enabled:
-                # 只顯示目前調整顏色的遮罩
+                live_color_ranges[current_color_to_adjust] = deepcopy(hsv_values)
+                result_frame, labels, masks = process_frame_and_control_arm(
+                    frame, state_manager, arm_controller, live_color_ranges,
+                    show_debug_windows=args.show_debug_masks
+                )
                 current_mask = None
                 if isinstance(masks, dict):
                     current_mask = masks.get(current_color_to_adjust)
                 else:
-                    current_mask = masks  # 若原本就是單一mask
+                    current_mask = masks
                 combined = draw_combined_ui(result_frame, hsv_values, current_color_to_adjust, current_mask)
                 cv2.imshow("ARMCtrl-ALL-IN-ONE", combined)
                 key = cv2.waitKey(1) & 0xFF
@@ -439,6 +440,23 @@ def main():
                 if cv2.getWindowProperty("ARMCtrl-ALL-IN-ONE", cv2.WND_PROP_VISIBLE) < 1:
                     print("[MainLocal] Window closed by user.")
                     break
+
+            # 無 UI 模式：檢查 ready_pin 狀態
+            else:
+                ready_pin_state = 0
+                if hasattr(arm_controller, "get_ready_pin"):
+                    ready_pin_state = arm_controller.get_ready_pin()
+                if ready_pin_state == 1:
+                    live_color_ranges[current_color_to_adjust] = deepcopy(hsv_values)
+                    result_frame, labels, masks = process_frame_and_control_arm(
+                        frame, state_manager, arm_controller, live_color_ranges,
+                        show_debug_windows=args.show_debug_masks
+                    )
+                else:
+                    result_frame = frame
+                    masks = None
+                # 若有需要可在這裡加自動儲存、紀錄等功能
+
             # 按鈕動作
             if current_action_from_buttons == "save":
                 vision_config.save_color_ranges(live_color_ranges)
