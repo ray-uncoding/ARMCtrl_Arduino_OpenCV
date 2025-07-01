@@ -105,12 +105,17 @@ def initialize_arm_controller(args):
     print(f"[Core] Arm controller initialized with GPIO pins: Relays {args.relay_pins}, LED {args.led_pin}. Inverse Logic: {args.arm_inverse_logic}")
     return arm_controller
 
-def process_frame_and_control_arm(frame, state_manager, arm_controller, current_color_ranges, show_debug_windows=False):
+def process_frame_and_control_arm(frame, state_manager, arm_controller, current_color_ranges, show_debug_windows=False, return_scores=False):
     """Processes a single frame for target detection and controls the arm."""
     # detect_target now returns labels like ['A', 'B'] based on color+shape and action_map
-    result_frame, detected_actions, mask = detect_target(frame.copy(), current_color_ranges, show_debug_windows=show_debug_windows)
+    result = detect_target(frame.copy(), current_color_ranges, show_debug_windows=show_debug_windows)
+    if len(result) == 4:
+        result_frame, detected_actions, mask, labels_with_scores = result
+    else:
+        result_frame, detected_actions, mask = result
+        labels_with_scores = []
 
-    if detected_actions and arm_controller: # Ensure arm_controller is not None and actions were detected
+    if detected_actions and arm_controller:  # 只有 arm_controller 不為 None 才執行動作
         # Process the first detected action
         # In a real scenario, you might need a more sophisticated way to prioritize if multiple actions are detected
         first_action_label = detected_actions[0] # e.g., 'A', 'B', 'C', or 'D'
@@ -148,7 +153,10 @@ def process_frame_and_control_arm(frame, state_manager, arm_controller, current_
         elif detected_actions: # An action label was detected but not mapped to a method
             print(f"[Core] Detected action label '{first_action_label}' has no defined arm trigger method.")
 
-    return result_frame, detected_actions, mask # Return detected_actions (e.g. ['A', 'B']) instead of raw color labels
+    if return_scores:
+        return result_frame, detected_actions, mask, labels_with_scores
+    else:
+        return result_frame, detected_actions, mask
 
 def cleanup_resources(cap, arm_controller):
     """Releases camera and cleans up GPIO resources."""

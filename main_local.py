@@ -4,6 +4,7 @@ import numpy as np
 import time
 from copy import deepcopy
 from PIL import ImageFont
+from collections import Counter
 
 from utils.app_core import (
     add_common_arguments, 
@@ -121,7 +122,7 @@ def draw_buttons_panel_img(current_color, panel_w=320, panel_h=None):
         )
     return panel
 
-def draw_combined_ui(main_img, hsv_values, current_color, mask=None):
+def draw_combined_ui(main_img, hsv_values, current_color, mask=None, label_counter=None):
     canvas_h, canvas_w = CANVAS_H, CANVAS_W
     canvas = np.full((canvas_h, canvas_w, 3), 255, dtype=np.uint8)  # 背景白色
 
@@ -180,7 +181,6 @@ def draw_combined_ui(main_img, hsv_values, current_color, mask=None):
     ctrl_panel = draw_buttons_panel_img(current_color, panel_w=hsv_panel_w)
     ctrl_h, ctrl_w = ctrl_panel.shape[:2]
     cv2.rectangle(canvas, (ctrl_panel_x, ctrl_panel_y), (ctrl_panel_x+ctrl_w, ctrl_panel_y+ctrl_h), (220,220,220), -1)
-    # 將 "控制面板" 文字往上提 15px
     canvas = draw_chinese_text(canvas, "控制面板", (ctrl_panel_x, ctrl_panel_y - 35), font_size=28, color=(0,0,0))
     # 修正：確保不超出 canvas
     y1 = int(ctrl_panel_y)
@@ -189,6 +189,20 @@ def draw_combined_ui(main_img, hsv_values, current_color, mask=None):
     x2 = min(x1 + ctrl_w, canvas.shape[1])
     panel_crop = ctrl_panel[:y2-y1, :x2-x1]
     canvas[y1:y2, x1:x2] = panel_crop
+
+    # 顯示計數器內容（左上角）
+    if label_counter is not None and len(label_counter) > 0:
+        counter_text = "計數器："
+        x_base = 30
+        y_base = 110  # 往下移動一點（原本是60）
+        canvas = draw_chinese_text(canvas, counter_text, (x_base, y_base), font_size=28, color=(0,0,255))
+        for i, (label, count) in enumerate(label_counter.most_common()):
+            text = f"{label}: {count}"
+            canvas = draw_chinese_text(canvas, text, (x_base, y_base + 35 + i*32), font_size=26, color=(0,0,180))
+
+    # 顯示模式
+    mode_text = f"模式：{'一般' if current_mode == MODE_AUTO else '模擬'}"
+    canvas = draw_chinese_text(canvas, mode_text, (30, 70), font_size=28, color=(0,128,255))
 
     return canvas
 
@@ -400,8 +414,14 @@ def select_camera_dialog():
             cv2.destroyWindow("Select Camera")
             return None
 
+# --- 新增全域變數 ---
+MODE_AUTO = "auto"
+MODE_SIM = "sim"
+current_mode = MODE_AUTO  # 預設自動辨識
+sim_ready_pin = 0         # 模擬模式下的 ready_pin 狀態
+
 def main():
-    global current_color_to_adjust, current_action_from_buttons, live_color_ranges, hsv_values, ui_enabled, save_feedback_end_time
+    global current_color_to_adjust, current_action_from_buttons, live_color_ranges, hsv_values, ui_enabled, save_feedback_end_time, current_mode, sim_ready_pin
     parser = argparse.ArgumentParser(description="ARMCtrl OpenCV Application - Local Display Mode with HSV Adjustment")
     parser = add_common_arguments(parser)
     parser.add_argument('--show_debug_masks', action=argparse.BooleanOptionalAction, default=False, help="Show individual color mask windows for debugging.")
@@ -420,50 +440,219 @@ def main():
     cv2.namedWindow("ARMCtrl-ALL-IN-ONE")
     cv2.setMouseCallback("ARMCtrl-ALL-IN-ONE", on_all_in_one_mouse)
     print("[MainLocal] System running. Use UI buttons or press 'q' in the OpenCV window to quit.")
+    label_counter = Counter()
+    window_start_time = None
+    window_duration = 3  # 秒
+    in_recognition = False
+
+    running = True
     try:
-        ready_sim_start_time = None
-        while True:
+        while running:
+            # 新增：主視窗被關閉時直接結束
+            if cv2.getWindowProperty("ARMCtrl-ALL-IN-ONE", cv2.WND_PROP_VISIBLE) < 1:
+                print("[MainLocal] 主視窗被關閉，程式結束。")
+                break
+
+            # 新增：無UI模式直接跳出主循環或執行無UI流程
+            if not ui_enabled:
+                print("[MainLocal] 進入無頭自動辨識模式")
+                in_recognition = False
+                window_start_time = None
+                label_counter.clear()
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    # 取得 ready_pin 狀態
+                    ready_pin_state = 0
+                    if hasattr(arm_controller, "get_ready_pin"):
+                        ready_pin_state = arm_controller.get_ready_pin()
+                    # 狀態機
+                    if not in_recognition:
+                        if ready_pin_state == 1:
+                            in_recognition = True
+                            window_start_time = time.time()
+                            label_counter.clear()
+                            print("[MainLocal] 進入辨識階段")
+                        else:
+                            time.sleep(0.05)
+                            continue
+                    else:
+                        # 辨識階段
+                        live_color_ranges[current_color_to_adjust] = deepcopy(hsv_values)
+                        _, labels, _, labels_with_scores = process_frame_and_control_arm(
+                            frame, state_manager, None, live_color_ranges,
+                            show_debug_windows=False,
+                            return_scores=True
+                        )
+                        if labels_with_scores:
+                            top_label, top_score = max(labels_with_scores, key=lambda x: x[1])
+                            label_counter[top_label] += 1
+                            for label, score in labels_with_scores:
+                                if label != top_label and label_counter[label] > 0:
+                                    label_counter[label] -= 1
+                        now = time.time()
+                        if now - window_start_time >= window_duration:
+                            if label_counter:
+                                most_common_label, count = label_counter.most_common(1)[0]
+                                print(f"[MainLocal] 3秒內最多的是 {most_common_label}，計數：{count}，送出對應訊號")
+                                if hasattr(arm_controller, f"trigger_action_{most_common_label}"):
+                                    getattr(arm_controller, f"trigger_action_{most_common_label}")()
+                            in_recognition = False
+                            window_start_time = None
+                            label_counter.clear()
+                break  # 跳出主循環
+
             ret, frame = cap.read()
             if not ret:
                 break
 
-            # 有 UI 模式：一直辨識
-            if ui_enabled:
+            # --- 立即處理按鈕動作 ---
+            if current_action_from_buttons == "save":
+                vision_config.save_color_ranges(live_color_ranges)
+                print("[MainLocal] Saved current HSV values for ALL colors to config.")
+                save_feedback_end_time = time.time() + 2 # 訊息顯示 2 秒
+                current_action_from_buttons = None
+            elif current_action_from_buttons == "set_red":
+                current_color_to_adjust = "Red"
+                hsv_values = deepcopy(live_color_ranges.get("Red", [[0,0,0],[179,255,255]]))
+                current_action_from_buttons = None
+            elif current_action_from_buttons == "set_blue":
+                current_color_to_adjust = "Blue"
+                hsv_values = deepcopy(live_color_ranges.get("Blue", [[100,100,100],[120,255,255]]))
+                current_action_from_buttons = None
+            elif current_action_from_buttons == "set_green":
+                current_color_to_adjust = "Green"
+                hsv_values = deepcopy(live_color_ranges.get("Green", [[40,100,100],[80,255,255]]))  # 預設綠色範圍
+                current_action_from_buttons = None
+            elif current_action_from_buttons == "quit":
+                print("[MainLocal] Quit button pressed.")
+                break
+            elif current_action_from_buttons == "auto_mode":
+                # 先跳出確認小視窗
+                if show_auto_mode_confirm(live_color_ranges):
+                    print("[MainLocal] 進入無頭自動辨識模式")
+                    ui_enabled = False
+                    cv2.destroyAllWindows()
+                else:
+                    print("[MainLocal] 取消進入無頭自動辨識模式")
+                current_action_from_buttons = None
+            elif current_action_from_buttons == "select_camera":
+                cam_idx = select_camera_dialog()
+                if cam_idx is not None:
+                    cv2.destroyWindow("ARMCtrl-ALL-IN-ONE")
+                    cleanup_resources(cap, arm_controller)
+                    cap, frame_width, frame_height, fps = initialize_camera(cam_idx)
+                    print(f"[MainLocal] 成功切換到攝影機 {cam_idx}.")
+                    arm_controller = initialize_arm_controller(args)
+                    state_manager = StateManager()
+                    live_color_ranges = deepcopy(vision_config.color_ranges)
+                    hsv_values = deepcopy(initial_hsv_for_trackbar)
+                    cv2.namedWindow("ARMCtrl-ALL-IN-ONE")
+                    cv2.setMouseCallback("ARMCtrl-ALL-IN-ONE", on_all_in_one_mouse)
+                    print("[MainLocal] 請重新設定 HSV 範圍.")
+                current_action_from_buttons = None
+
+            # --- 模式切換 ---
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('a'):
+                current_mode = MODE_AUTO
+                print("[MainLocal] 切換到一般辨識模式")
+                in_recognition = False
+                window_start_time = None
+                label_counter.clear()
+            elif key == ord('s'):
+                current_mode = MODE_SIM
+                print("[MainLocal] 切換到模擬模式")
+                in_recognition = False
+                window_start_time = None
+                label_counter.clear()
+            elif key == ord('d') and current_mode == MODE_SIM:
+                sim_ready_pin = 1
+                print("[MainLocal] 模擬模式：ready_pin=1（進入辨識階段）")
+            elif key == ord('q'):
+                break
+
+            # --- 狀態機流程 ---
+            if current_mode == MODE_AUTO:
+                # 自動辨識模式：每幀即時辨識，不做計數与統計
                 live_color_ranges[current_color_to_adjust] = deepcopy(hsv_values)
-                result_frame, labels, masks = process_frame_and_control_arm(
-                    frame, state_manager, arm_controller, live_color_ranges,
-                    show_debug_windows=args.show_debug_masks
+                result_frame, labels, masks, labels_with_scores = process_frame_and_control_arm(
+                    frame, state_manager, None, live_color_ranges,
+                    show_debug_windows=args.show_debug_masks,
+                    return_scores=True
                 )
                 current_mask = None
                 if isinstance(masks, dict):
                     current_mask = masks.get(current_color_to_adjust)
                 else:
                     current_mask = masks
-                combined = draw_combined_ui(result_frame, hsv_values, current_color_to_adjust, current_mask)
+                # 不顯示計數器
+                combined = draw_combined_ui(result_frame, hsv_values, current_color_to_adjust, current_mask, label_counter=None)
                 cv2.imshow("ARMCtrl-ALL-IN-ONE", combined)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    break
-                # 檢查視窗是否被手動關閉 (按X)
                 if cv2.getWindowProperty("ARMCtrl-ALL-IN-ONE", cv2.WND_PROP_VISIBLE) < 1:
-                    print("[MainLocal] Window closed by user.")
+                    print("[MainLocal] 主視窗被關閉，程式結束。")
+                    running = False
                     break
-
-            # 無 UI 模式：檢查 ready_pin 狀態
             else:
-                ready_pin_state = 0
-                if hasattr(arm_controller, "get_ready_pin"):
-                    ready_pin_state = arm_controller.get_ready_pin()
-                if ready_pin_state == 1:
-                    live_color_ranges[current_color_to_adjust] = deepcopy(hsv_values)
-                    result_frame, labels, masks = process_frame_and_control_arm(
-                        frame, state_manager, arm_controller, live_color_ranges,
-                        show_debug_windows=args.show_debug_masks
-                    )
+                # 模擬模式
+                ready_pin_state = sim_ready_pin
+                if not in_recognition:
+                    if ready_pin_state == 1:
+                        in_recognition = True
+                        window_start_time = time.time()
+                        label_counter.clear()
+                        print("[MainLocal] 進入辨識階段")
+                    else:
+                        standby_frame = frame.copy()
+                        standby_frame = draw_chinese_text(standby_frame, "待機中，請等待 ready 訊號", (60, 80), font_size=48, color=(0,0,255))
+                        combined = draw_combined_ui(standby_frame, hsv_values, current_color_to_adjust, None, label_counter=None)
+                        cv2.imshow("ARMCtrl-ALL-IN-ONE", combined)
+                        if cv2.getWindowProperty("ARMCtrl-ALL-IN-ONE", cv2.WND_PROP_VISIBLE) < 1:
+                            print("[MainLocal] 主視窗被關閉，程式結束。")
+                            running = False
+                            break
+                        continue
                 else:
-                    result_frame = frame
-                    masks = None
-                # 若有需要可在這裡加自動儲存、紀錄等功能
+                    # 辨識階段
+                    live_color_ranges[current_color_to_adjust] = deepcopy(hsv_values)
+                    result_frame, labels, masks, labels_with_scores = process_frame_and_control_arm(
+                        frame, state_manager, None, live_color_ranges,
+                        show_debug_windows=args.show_debug_masks,
+                        return_scores=True
+                    )
+                    if labels_with_scores:
+                        top_label, top_score = max(labels_with_scores, key=lambda x: x[1])
+                        label_counter[top_label] += 1
+                        for label, score in labels_with_scores:
+                            if label != top_label and label_counter[label] > 0:
+                                label_counter[label] -= 1
+
+                    now = time.time()
+                    if now - window_start_time >= window_duration:
+                        if label_counter:
+                            most_common_label, count = label_counter.most_common(1)[0]
+                            print(f"[MainLocal] 3秒內最多的是 {most_common_label}，計數：{count}，送出對應訊號")
+                            if hasattr(arm_controller, f"trigger_action_{most_common_label}"):
+                                getattr(arm_controller, f"trigger_action_{most_common_label}")()
+                        # 回到待機階段
+                        in_recognition = False
+                        window_start_time = None
+                        label_counter.clear()
+                        sim_ready_pin = 0  # <--- 新增這行，讓 ready_pin 歸零
+
+                    current_mask = None
+                    if isinstance(masks, dict):
+                        current_mask = masks.get(current_color_to_adjust)
+                    else:
+                        current_mask = masks
+                    combined = draw_combined_ui(result_frame, hsv_values, current_color_to_adjust, current_mask, label_counter=label_counter)
+                    cv2.imshow("ARMCtrl-ALL-IN-ONE", combined)
+                    # 補上主視窗關閉檢查
+                    if cv2.getWindowProperty("ARMCtrl-ALL-IN-ONE", cv2.WND_PROP_VISIBLE) < 1:
+                        print("[MainLocal] 主視窗被關閉，程式結束。")
+                        running = False
+                        break
 
             # 按鈕動作
             if current_action_from_buttons == "save":
@@ -487,12 +676,13 @@ def main():
                 print("[MainLocal] Quit button pressed.")
                 break
             elif current_action_from_buttons == "auto_mode":
+                # 先跳出確認小視窗
                 if show_auto_mode_confirm(live_color_ranges):
+                    print("[MainLocal] 進入無頭自動辨識模式")
                     ui_enabled = False
                     cv2.destroyAllWindows()
-                    print("[MainLocal] Entering headless (auto) mode, UI closed.")
                 else:
-                    print("[MainLocal] 取消進入自動模式。")
+                    print("[MainLocal] 取消進入無頭自動辨識模式")
                 current_action_from_buttons = None
             # 新增鏡頭選擇功能
             elif current_action_from_buttons == "select_camera":

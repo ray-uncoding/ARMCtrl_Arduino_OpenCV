@@ -18,6 +18,7 @@ def detect_target(frame, color_ranges_to_use, show_debug_windows=False):
     result_frame = frame.copy()
     mask_dict = {}
     detected_labels = []
+    detected_labels_with_scores = []
 
     for color_name, (lower, upper) in color_ranges_to_use.items():
         lower_np = np.array(lower)
@@ -57,11 +58,11 @@ def detect_target(frame, color_ranges_to_use, show_debug_windows=False):
 
             if shape and validate_shape(cnt, approx, shape):
                 score = compute_confidence(cnt, approx, mask, shape)
-
                 if score >= 0.7:
                     label = action_map.get((color_name, shape), None)
                     if label:
                         detected_labels.append(label)
+                        detected_labels_with_scores.append((label, score))
                         cv2.rectangle(result_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                         ch_color = color_ch_map.get(color_name, color_name)
                         ch_shape = shape_ch_map.get(shape, shape)
@@ -76,4 +77,4 @@ def detect_target(frame, color_ranges_to_use, show_debug_windows=False):
                             font_path="chinese.ttf"
                         )
 
-    return result_frame, detected_labels, mask_dict  # 回傳 dict
+    return result_frame, detected_labels, mask_dict, detected_labels_with_scores  # 回傳 dict
