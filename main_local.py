@@ -449,13 +449,9 @@ def main():
     try:
         while running:
             # 新增：主視窗被關閉時直接結束
-            try:
-                if cv2.getWindowProperty("ARMCtrl-ALL-IN-ONE", cv2.WND_PROP_VISIBLE) < 1:
-                    print("[MainLocal] 主視窗被關閉，程式結束。")
-                    break
-            except cv2.error:
-                print("[MainLocal] 主視窗不存在或已被關閉，程式結束。")
-                break
+            # if cv2.getWindowProperty("ARMCtrl-ALL-IN-ONE", cv2.WND_PROP_VISIBLE) < 1:
+            #     print("[MainLocal] 主視窗被關閉，程式結束。")
+            #     break
 
             # 新增：無UI模式直接跳出主循環或執行無UI流程
             if not ui_enabled:
