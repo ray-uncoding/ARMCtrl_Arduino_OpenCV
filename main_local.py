@@ -201,8 +201,8 @@ def draw_combined_ui(main_img, hsv_values, current_color, mask=None, label_count
             canvas = draw_chinese_text(canvas, text, (x_base, y_base + 35 + i*32), font_size=26, color=(0,0,180))
 
     # 顯示模式
-    mode_text = f"模式：{'一般' if current_mode == MODE_AUTO else '模擬'}"
-    canvas = draw_chinese_text(canvas, mode_text, (30, 70), font_size=28, color=(0,128,255))
+    # mode_text = f"模式：{'一般' if current_mode == MODE_AUTO else '模擬'}"
+    # canvas = draw_chinese_text(canvas, mode_text, (30, 70), font_size=28, color=(0,128,255))
 
     return canvas
 
