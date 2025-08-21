@@ -455,7 +455,7 @@ def main():
 
             # 新增：無UI模式直接跳出主循環或執行無UI流程
             if not ui_enabled:
-                print("[MainLocal] 進入無頭自動辨識模式")
+                # print("[MainLocal] 進入無頭自動辨識模式")
                 in_recognition = False
                 window_start_time = None
                 label_counter.clear()
@@ -596,7 +596,10 @@ def main():
                     break
             else:
                 # 模擬模式
+                # 讓 ready_pin_state 同時監測 sim_ready_pin 及真實 ready_pin(內部測試)
                 ready_pin_state = sim_ready_pin
+                if hasattr(arm_controller, "get_ready_pin"):
+                    ready_pin_state = ready_pin_state or arm_controller.get_ready_pin()
                 if not in_recognition:
                     if ready_pin_state == 1:
                         in_recognition = True
